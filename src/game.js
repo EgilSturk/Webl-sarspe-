@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 clearTimeout(window.__emergencyTimer);
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const HEDGEHOG_URL   = './assets/hedgehog.glb';
+const TREE_URL       = './assets/tree.glb';
+const GRASS_URL      = './assets/grass.glb';
 const GROUND_TEX_URL = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141421_6abab39d-6fa3-4dfc-ba52-0fda3bfe5530.png';
 const MUSIC_URL      = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141450_8c0d6f66-dfa9-49f9-9072-ed7afc41516c.m4a';
 const COLLECT_URL    = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141452_d51b6392-abad-4eff-ac73-df6076365ec5.mp3';
@@ -110,7 +113,6 @@ sun.shadow.camera.left = -32; sun.shadow.camera.right =  32;
 sun.shadow.camera.bottom = -32; sun.shadow.camera.top =  32;
 sun.shadow.bias = -0.0008;
 scene.add(sun);
-scene.add(new THREE.DirectionalLight(0x88ccff, 0.6).position.set(-14, 20, -10) && sun);
 const skyFill = new THREE.DirectionalLight(0x88ccff, 0.6);
 skyFill.position.set(-14, 20, -10);
 scene.add(skyFill);
@@ -136,61 +138,131 @@ function buildGround(tex) {
 texLoader.load(GROUND_TEX_URL, buildGround, undefined, () => buildGround(null));
 
 // ── Trees ─────────────────────────────────────────────────────────────────────
-const trunkMat  = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.95 });
-const trunkGeo  = new THREE.CylinderGeometry(0.22, 0.36, 2.0, 7);
-const leafGeo   = new THREE.SphereGeometry(1.15, 8, 6);
-const pineGeo   = new THREE.ConeGeometry(1.05, 2.0, 8);
-const leafCols  = [0x2a6020, 0x357025, 0x225018, 0x2e6828];
-const pineCols  = [0x1a4810, 0x245018, 0x1c4012, 0x20561a];
-const rng = seededRNG(42);
-for (let i = 0; i < 40; i++) {
-  const a   = (i / 40) * Math.PI * 2 + rng() * 0.2;
-  const rad = WORLD + 1.8 + rng() * 2.8;
-  const x   = Math.cos(a) * rad, z = Math.sin(a) * rad;
-  const h   = 1.6 + rng() * 1.5;
-  const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-  trunk.position.set(x, h * 0.45, z); trunk.scale.y = h / 2.0;
-  scene.add(trunk);
-  if (rng() > 0.45) {
-    const mat = new THREE.MeshStandardMaterial({ color: pineCols[i % 4], roughness: 0.85 });
-    for (let t = 0; t < 3; t++) {
-      const c = new THREE.Mesh(pineGeo, mat);
-      c.scale.set(0.95 - t * 0.2, 0.85, 0.95 - t * 0.2);
-      c.position.set(x, h * 0.78 + t * 0.95, z);
-      scene.add(c);
-    }
-  } else {
-    const mat = new THREE.MeshStandardMaterial({ color: leafCols[i % 4], roughness: 0.85 });
-    const top = new THREE.Mesh(leafGeo, mat);
-    top.scale.set(0.9 + rng() * 0.45, 1.15 + rng() * 0.5, 0.9 + rng() * 0.45);
-    top.position.set(x, h * 0.9 + 1.55, z);
-    scene.add(top);
+const treeGroup = new THREE.Group();
+{
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.95 });
+  const trunkGeo = new THREE.CylinderGeometry(0.22, 0.36, 2.0, 7);
+  const leafGeo  = new THREE.SphereGeometry(1.15, 8, 6);
+  const pineGeo  = new THREE.ConeGeometry(1.05, 2.0, 8);
+  const leafCols = [0x2a6020, 0x357025, 0x225018, 0x2e6828];
+  const pineCols = [0x1a4810, 0x245018, 0x1c4012, 0x20561a];
+  const rng = seededRNG(42);
+  for (let i = 0; i < 40; i++) {
+    const a   = (i / 40) * Math.PI * 2 + rng() * 0.2;
+    const rad = WORLD + 1.8 + rng() * 2.8;
+    const x   = Math.cos(a) * rad, z = Math.sin(a) * rad;
+    const h   = 1.6 + rng() * 1.5;
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.set(x, h * 0.45, z); trunk.scale.y = h / 2.0;
+    treeGroup.add(trunk);
     if (rng() > 0.45) {
-      const top2 = new THREE.Mesh(leafGeo, mat);
-      top2.scale.setScalar(0.55 + rng() * 0.2);
-      top2.position.set(x + rng() * 0.7, h * 0.9 + 3.0, z + rng() * 0.7);
-      scene.add(top2);
+      const mat = new THREE.MeshStandardMaterial({ color: pineCols[i % 4], roughness: 0.85 });
+      for (let t = 0; t < 3; t++) {
+        const c = new THREE.Mesh(pineGeo, mat);
+        c.scale.set(0.95 - t * 0.2, 0.85, 0.95 - t * 0.2);
+        c.position.set(x, h * 0.78 + t * 0.95, z);
+        treeGroup.add(c);
+      }
+    } else {
+      const mat = new THREE.MeshStandardMaterial({ color: leafCols[i % 4], roughness: 0.85 });
+      const top = new THREE.Mesh(leafGeo, mat);
+      top.scale.set(0.9 + rng() * 0.45, 1.15 + rng() * 0.5, 0.9 + rng() * 0.45);
+      top.position.set(x, h * 0.9 + 1.55, z);
+      treeGroup.add(top);
+      if (rng() > 0.45) {
+        const top2 = new THREE.Mesh(leafGeo, mat);
+        top2.scale.setScalar(0.55 + rng() * 0.2);
+        top2.position.set(x + rng() * 0.7, h * 0.9 + 3.0, z + rng() * 0.7);
+        treeGroup.add(top2);
+      }
     }
   }
 }
+scene.add(treeGroup);
+new GLTFLoader().load(TREE_URL, (gltf) => {
+  scene.remove(treeGroup);
+  const template = gltf.scene;
+  template.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; } });
+  const bbox = new THREE.Box3().setFromObject(template);
+  const sz   = bbox.getSize(new THREE.Vector3());
+  const baseScale = 5.5 / sz.y;
+  const rng = seededRNG(42);
+  for (let i = 0; i < 22; i++) {
+    const a   = (i / 22) * Math.PI * 2 + rng() * 0.3;
+    const rad = WORLD + 2.0 + rng() * 3.5;
+    const clone = template.clone(true);
+    const s = baseScale * (0.75 + rng() * 0.55);
+    clone.scale.setScalar(s);
+    const cb = new THREE.Box3().setFromObject(clone);
+    clone.position.set(Math.cos(a) * rad, -cb.min.y, Math.sin(a) * rad);
+    clone.rotation.y = rng() * Math.PI * 2;
+    scene.add(clone);
+  }
+});
 
-// ── Grass tufts (instanced cross-quads) ───────────────────────────────────────
-const grassGeo = new THREE.PlaneGeometry(0.18, 0.4);
-const grassMat = new THREE.MeshBasicMaterial({ color: 0x4aaa2a, side: THREE.DoubleSide });
-function makeGrassInst(seed, rotOffset) {
-  const inst = new THREE.InstancedMesh(grassGeo, grassMat, 300);
-  const d = new THREE.Object3D(), r = seededRNG(seed);
-  for (let i = 0; i < 300; i++) {
-    d.position.set((r() * 2 - 1) * (WORLD - 1), 0.2, (r() * 2 - 1) * (WORLD - 1));
-    d.rotation.y = r() * Math.PI + rotOffset;
-    d.scale.setScalar(0.7 + r() * 0.8);
+// ── Grass tufts ───────────────────────────────────────────────────────────────
+const grassGroup = new THREE.Group();
+{
+  const qGeo = new THREE.PlaneGeometry(0.18, 0.4);
+  const qMat = new THREE.MeshBasicMaterial({ color: 0x4aaa2a, side: THREE.DoubleSide });
+  function makeGrassInst(seed, rotOffset) {
+    const inst = new THREE.InstancedMesh(qGeo, qMat, 300);
+    const d = new THREE.Object3D(), r = seededRNG(seed);
+    for (let i = 0; i < 300; i++) {
+      d.position.set((r() * 2 - 1) * (WORLD - 1), 0.2, (r() * 2 - 1) * (WORLD - 1));
+      d.rotation.y = r() * Math.PI + rotOffset;
+      d.scale.setScalar(0.7 + r() * 0.8);
+      d.updateMatrix(); inst.setMatrixAt(i, d.matrix);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    return inst;
+  }
+  grassGroup.add(makeGrassInst(91, 0));
+  grassGroup.add(makeGrassInst(91, Math.PI / 2));
+}
+scene.add(grassGroup);
+new GLTFLoader().load(GRASS_URL, (gltf) => {
+  scene.remove(grassGroup);
+  const geos = [];
+  gltf.scene.updateMatrixWorld(true);
+  gltf.scene.traverse(m => {
+    if (!m.isMesh || !m.geometry) return;
+    const g = m.geometry.clone();
+    // Normalise attributes to pos+normal+uv so mergeGeometries works
+    for (const k of Object.keys(g.attributes)) {
+      if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+    }
+    if (!g.attributes.normal) g.computeVertexNormals();
+    if (!g.attributes.uv) {
+      g.setAttribute('uv', new THREE.BufferAttribute(
+        new Float32Array(g.attributes.position.count * 2), 2));
+    }
+    g.applyMatrix4(m.matrixWorld);
+    geos.push(g);
+  });
+  if (geos.length === 0) { scene.add(grassGroup); return; }
+  const merged = mergeGeometries(geos, false);
+  if (!merged) { scene.add(grassGroup); return; }
+  merged.computeBoundingBox();
+  const sz    = merged.boundingBox.getSize(new THREE.Vector3());
+  const scale = 0.6 / sz.y;
+  merged.scale(scale, scale, scale);
+  merged.computeBoundingBox();
+  const cx = (merged.boundingBox.min.x + merged.boundingBox.max.x) / 2;
+  const cz = (merged.boundingBox.min.z + merged.boundingBox.max.z) / 2;
+  merged.translate(-cx, -merged.boundingBox.min.y, -cz);
+  const inst = new THREE.InstancedMesh(merged,
+    new THREE.MeshStandardMaterial({ color: 0x3d8a28, roughness: 0.9, side: THREE.DoubleSide }), 90);
+  const d = new THREE.Object3D(), r = seededRNG(91);
+  for (let i = 0; i < 90; i++) {
+    d.position.set((r() * 2 - 1) * (WORLD - 1.5), 0, (r() * 2 - 1) * (WORLD - 1.5));
+    d.rotation.y = r() * Math.PI * 2;
+    d.scale.setScalar(0.6 + r() * 0.9);
     d.updateMatrix(); inst.setMatrixAt(i, d.matrix);
   }
   inst.instanceMatrix.needsUpdate = true;
-  return inst;
-}
-scene.add(makeGrassInst(91, 0));
-scene.add(makeGrassInst(91, Math.PI / 2));
+  scene.add(inst);
+});
 
 // ── Pebbles ───────────────────────────────────────────────────────────────────
 const pebbleInst = new THREE.InstancedMesh(
