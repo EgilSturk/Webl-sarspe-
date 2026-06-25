@@ -81,12 +81,24 @@ canvas{display:block;}
   border-right:10px solid transparent;
   border-bottom:22px solid rgba(68,221,255,.92);
   filter:drop-shadow(0 0 4px #44ddff);}
+.sniff-arrow-gold{border-bottom-color:rgba(255,215,0,.95);filter:drop-shadow(0 0 6px #ffd700);}
+
+/* Level-up popup */
+.level-pop{position:fixed;color:#fff;font-family:sans-serif;font-weight:bold;
+  font-size:1.5em;text-shadow:0 0 12px #ffd700,0 2px 4px rgba(0,0,0,.6);
+  pointer-events:none;z-index:15;white-space:nowrap;
+  animation:popUp 1.4s ease-out forwards;}
+
+/* Food name popup */
+.food-name-pop{position:fixed;color:#fff;font-family:sans-serif;font-size:.85em;
+  opacity:.9;pointer-events:none;z-index:15;
+  animation:popUp .95s ease-out forwards;}
 </style>
 </head>
 <body>
 
 <!-- HUD -->
-<div id="score-box">Σκορ: <span id="score">0</span></div>
+<div id="score-box">Σκορ: <span id="score">0</span> &nbsp;·&nbsp; Επ. <span id="level">1</span></div>
 <div id="hunger-wrap">
   <div id="hunger-label">ΠΕΙΝΑ</div>
   <div id="hunger-fill"></div>
