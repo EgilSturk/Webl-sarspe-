@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Hedgehog Hunger Quest</title>
+<title>Αναζήτηση Τροφής Σκαντζόχοιρου</title>
 <script type="importmap">{"imports":{"three":"./assets/vendor/three.module.min.js"}}</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -44,13 +44,13 @@ canvas{display:block;position:fixed;inset:0;z-index:0}
 
 <div id="loading">
   <div class="hedgehog-anim">🦔</div>
-  <div id="load-msg">Loading hedgehog…</div>
+  <div id="load-msg">Φόρτωση σκαντζόχοιρου…</div>
   <div id="prog-bar"><div id="prog-fill"></div></div>
 </div>
 
 <div id="hud">
   <div id="hunger-wrap">
-    <div id="hunger-label">HUNGER</div>
+    <div id="hunger-label">ΠΕΙΝΑ</div>
     <div id="hunger-bg"><div id="hunger-fill"></div></div>
   </div>
   <div id="score">0</div>
@@ -61,12 +61,12 @@ canvas{display:block;position:fixed;inset:0;z-index:0}
 
 <div id="overlay">
   <div id="ov-emoji">🦔</div>
-  <div id="ov-title">Hedgehog<br>Hunger Quest</div>
-  <div id="ov-desc">Find food before your hunger runs out!</div>
-  <div id="ov-hint">WASD / arrows to move&nbsp;&nbsp;•&nbsp;&nbsp;Mobile: joystick<br>👃 Sniff to detect nearby food</div>
+  <div id="ov-title">Σκαντζόχοιρος<br>Αναζητά Τροφή</div>
+  <div id="ov-desc">Βρες φαγητό πριν ξεμείνεις από πείνα!</div>
+  <div id="ov-hint">WASD / βέλη για κίνηση&nbsp;&nbsp;•&nbsp;&nbsp;Κινητό: χειριστήριο<br>👃 Μύρισε για να βρεις κοντινό φαγητό</div>
   <div id="ov-score"></div>
   <div id="ov-hi"></div>
-  <button id="start-btn">Play</button>
+  <button id="start-btn">Παίξε</button>
 </div>
 
 <div id="dev"></div>

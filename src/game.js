@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 clearTimeout(window.__emergencyTimer);
 
@@ -258,7 +257,6 @@ scene.add(procHedgehog);
 let modelReady = false;
 
 const gltfLoader = new GLTFLoader();
-gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 setProgress(25);
 
 gltfLoader.load(
@@ -367,7 +365,7 @@ function activeHedgehog() { return hedgehogNode || procHedgehog; }
 // ── Food system ───────────────────────────────────────────────────────────────
 const FOOD_TYPES = [
   {
-    label: 'Berry', pts: 10,
+    label: 'Μούρα', pts: 10,
     make() {
       const g = new THREE.Group();
       for (let i = 0; i < 3; i++) {
@@ -386,7 +384,7 @@ const FOOD_TYPES = [
     }
   },
   {
-    label: 'Mushroom', pts: 15,
+    label: 'Μανιτάρι', pts: 15,
     make() {
       const g = new THREE.Group();
       const stem = new THREE.Mesh(
@@ -415,7 +413,7 @@ const FOOD_TYPES = [
     }
   },
   {
-    label: 'Worm', pts: 20,
+    label: 'Σκουλήκι', pts: 20,
     make() {
       const g = new THREE.Group();
       const wormMat = new THREE.MeshStandardMaterial({
@@ -433,7 +431,7 @@ const FOOD_TYPES = [
     }
   },
   {
-    label: 'Corn', pts: 12,
+    label: 'Καλαμπόκι', pts: 12,
     make() {
       const g = new THREE.Group();
       const cob = new THREE.Mesh(
@@ -455,7 +453,7 @@ const FOOD_TYPES = [
     }
   },
   {
-    label: 'Acorn', pts: 8,
+    label: 'Βελανίδι', pts: 8,
     make() {
       const g = new THREE.Group();
       const nut = new THREE.Mesh(
@@ -700,14 +698,14 @@ function endGame() {
   if (score > hiScore) { hiScore = score; localStorage.setItem('hq_hi', hiScore); }
 
   elOvEmoji.textContent  = '😢';
-  elOvTitle.textContent  = 'Too Hungry!';
-  elOvDesc.textContent   = 'Your hedgehog ran out of food…';
+  elOvTitle.textContent  = 'Πολύ Πεινασμένος!';
+  elOvDesc.textContent   = 'Ο σκαντζόχοιρός σου έμεινε χωρίς φαγητό…';
   elOvHint.textContent   = '';
-  elOvScore.textContent  = 'Score: ' + score;
-  elOvHi.textContent     = 'Best: '  + hiScore;
+  elOvScore.textContent  = 'Σκορ: ' + score;
+  elOvHi.textContent     = 'Ρεκόρ: ' + hiScore;
   elOvScore.style.display = '';
   elOvHi.style.display    = '';
-  elStartBtn.textContent  = 'Play Again';
+  elStartBtn.textContent  = 'Παίξε Ξανά';
   elOverlay.style.display = 'flex';
 }
 
