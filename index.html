@@ -74,7 +74,10 @@ canvas{display:block;position:fixed;inset:0;z-index:0}
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from './assets/vendor/GLTFLoader.js';
-import { STR } from './strings.js';
+
+const _elMsg = document.getElementById('load-msg');
+window.onerror = (_m, _s, _l, _c, err) => { if (_elMsg) _elMsg.textContent = 'Error: ' + (err?.message || _m); };
+window.addEventListener('unhandledrejection', e => { if (_elMsg) _elMsg.textContent = 'Error: ' + e.reason; });
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const HEDGEHOG_URL  = 'https://raw.githubusercontent.com/egilsturk/webl-sarspe-/claude/hedgehog-browser-game-27v6a7/assets/hedgehog.glb';
@@ -285,8 +288,8 @@ gltfLoader.load(
 // Also load audio (non-blocking)
 loadAudioAsync();
 
-// Fallback: show game after 10 seconds regardless
-const loadFallback = setTimeout(() => { modelReady = true; finishLoad(); }, 10000);
+// Fallback: show game after 2 seconds regardless (GLB loads in background)
+const loadFallback = setTimeout(() => { modelReady = true; finishLoad(); }, 2000);
 
 function setProgress(pct) { elProgFill.style.width = pct + '%'; }
 
