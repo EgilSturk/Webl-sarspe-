@@ -8,16 +8,20 @@ const HEDGEHOG_URL   = './assets/hedgehog.glb';
 const GROUND_TEX_URL = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141421_6abab39d-6fa3-4dfc-ba52-0fda3bfe5530.png';
 const MUSIC_URL      = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141450_8c0d6f66-dfa9-49f9-9072-ed7afc41516c.m4a';
 const COLLECT_URL    = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141452_d51b6392-abad-4eff-ac73-df6076365ec5.mp3';
-const WORLD        = 18;
-const SPEED        = 5.5;
-const BASE_DRAIN   = 0.038;
-const DRAIN_SCALE  = 0.00008;
-const RESTORE      = 0.30;
-const MAX_FOOD     = 5;
-const COLLECT_R    = 1.5;
+const WORLD        = 22;
+const SPEED        = 6.2;
+const BASE_DRAIN   = 0.030;
+const DRAIN_SCALE  = 0.00006;
+const RESTORE      = 0.28;
+const MAX_FOOD     = 8;
+const COLLECT_R    = 1.8;
 const STEP         = 1 / 60;
 const DEV          = new URLSearchParams(location.search).has('dev');
 const DPR_CAP      = 1.5;
+const SNIFF_RANGE  = 10;
+const SNIFF_CD     = 2.5;
+const COMBO_WINDOW = 2.2;
+const SPEED_RAMP   = 1.28;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const elScore    = document.getElementById('score');
@@ -37,6 +41,8 @@ const elDev      = document.getElementById('dev');
 const elJoyBase  = document.getElementById('joy-base');
 const elJoyKnob  = document.getElementById('joy-knob');
 const elBtnSniff = document.getElementById('btn-sniff');
+const elVignette = document.getElementById('vignette');
+const elCombo    = document.getElementById('combo');
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -51,11 +57,11 @@ document.body.insertBefore(renderer.domElement, document.body.firstChild);
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x8ec8e8, 0.016);
+scene.fog = new THREE.FogExp2(0x8ec8e8, 0.013);
 
 // ── Camera ────────────────────────────────────────────────────────────────────
-const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 80);
-const CAM_OFFSET = new THREE.Vector3(0, 12, 9);
+const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 90);
+const CAM_OFFSET = new THREE.Vector3(0, 13, 10);
 camera.position.copy(CAM_OFFSET);
 camera.lookAt(0, 0, 0);
 const camLookTarget = new THREE.Vector3();
@@ -70,60 +76,64 @@ addEventListener('focus', () => { paused = false; lastTs = performance.now(); })
 
 // ── Sky dome ──────────────────────────────────────────────────────────────────
 scene.add(new THREE.Mesh(
-  new THREE.SphereGeometry(72, 20, 10),
+  new THREE.SphereGeometry(80, 20, 10),
   new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
     uniforms: {
-      uTop:    { value: new THREE.Color(0x2060b0) },
-      uHorizon:{ value: new THREE.Color(0x7ec8e8) },
+      uTop:    { value: new THREE.Color(0x1a55aa) },
+      uMid:    { value: new THREE.Color(0x3d99d8) },
+      uHorizon:{ value: new THREE.Color(0x9ddcf0) },
     },
     vertexShader: `
       varying vec3 vPos;
       void main(){ vPos=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }
     `,
     fragmentShader: `
-      uniform vec3 uTop,uHorizon;
+      uniform vec3 uTop,uMid,uHorizon;
       varying vec3 vPos;
       void main(){
-        float t=clamp(vPos.y/55.0,0.0,1.0);
-        gl_FragColor=vec4(mix(uHorizon,uTop,t*t),1.0);
+        float t=clamp(vPos.y/60.0,0.0,1.0);
+        vec3 col = t < 0.3
+          ? mix(uHorizon, uMid, t/0.3)
+          : mix(uMid, uTop, (t-0.3)/0.7);
+        gl_FragColor=vec4(col,1.0);
       }
     `,
   })
 ));
 
 // ── Lights ────────────────────────────────────────────────────────────────────
-scene.add(new THREE.AmbientLight(0xffeedd, 0.35));
+scene.add(new THREE.AmbientLight(0xffeedd, 0.40));
 
-const sun = new THREE.DirectionalLight(0xfff8e8, 2.4);
-sun.position.set(18, 28, 12);
+const sun = new THREE.DirectionalLight(0xfff5e0, 2.6);
+sun.position.set(20, 32, 14);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.near = 1;
-sun.shadow.camera.far  = 70;
-sun.shadow.camera.left   = -28;
-sun.shadow.camera.right  =  28;
-sun.shadow.camera.bottom = -28;
-sun.shadow.camera.top    =  28;
+sun.shadow.camera.far  = 80;
+sun.shadow.camera.left   = -32;
+sun.shadow.camera.right  =  32;
+sun.shadow.camera.bottom = -32;
+sun.shadow.camera.top    =  32;
 sun.shadow.bias = -0.0008;
 scene.add(sun);
 
-const skyFill = new THREE.DirectionalLight(0x88ccff, 0.55);
-skyFill.position.set(-12, 18, -8);
+const skyFill = new THREE.DirectionalLight(0x88ccff, 0.6);
+skyFill.position.set(-14, 20, -10);
 scene.add(skyFill);
 
-scene.add(new THREE.HemisphereLight(0x8ec8e8, 0x5a9a40, 0.45));
+scene.add(new THREE.HemisphereLight(0x9ddcf0, 0x5aaa38, 0.5));
 
 // ── Ground ────────────────────────────────────────────────────────────────────
 const texLoader = new THREE.TextureLoader();
-const groundGeo = new THREE.PlaneGeometry(WORLD * 2, WORLD * 2);
+const groundGeo = new THREE.PlaneGeometry(WORLD * 2, WORLD * 2, 1, 1);
 
 function buildGround(tex) {
   let mat;
   if (tex) {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(9, 9);
+    tex.repeat.set(10, 10);
     tex.colorSpace = THREE.SRGBColorSpace;
     mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0.0 });
   } else {
@@ -136,62 +146,111 @@ function buildGround(tex) {
 }
 texLoader.load(GROUND_TEX_URL, buildGround, undefined, () => buildGround(null));
 
-// ── Boundary trees ────────────────────────────────────────────────────────────
-const trunkMat   = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.95 });
-const foliageColors = [0x2d6626, 0x3a7a2a, 0x265520, 0x327030];
-const trunkGeo   = new THREE.CylinderGeometry(0.22, 0.34, 1.8, 7);
-const foliageGeo = new THREE.SphereGeometry(1.1, 8, 6);
+// ── Trees ─────────────────────────────────────────────────────────────────────
+const trunkMat    = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.95 });
+const trunkGeo    = new THREE.CylinderGeometry(0.22, 0.36, 2.0, 7);
+const leafColors  = [0x2a6020, 0x357025, 0x225018, 0x2e6828];
+const pineColors  = [0x1a4810, 0x245018, 0x1c4012, 0x20561a];
+const leafGeo     = new THREE.SphereGeometry(1.15, 8, 6);
+const pineConeGeo = new THREE.ConeGeometry(1.1, 2.2, 8);
 const rng = seededRNG(42);
-for (let i = 0; i < 32; i++) {
-  const a   = (i / 32) * Math.PI * 2 + rng() * 0.25;
-  const rad = WORLD + 1.6 + rng() * 2.2;
+
+for (let i = 0; i < 38; i++) {
+  const a   = (i / 38) * Math.PI * 2 + rng() * 0.22;
+  const rad = WORLD + 1.8 + rng() * 2.5;
   const x   = Math.cos(a) * rad;
   const z   = Math.sin(a) * rad;
-  const h   = 1.5 + rng() * 1.2;
+  const h   = 1.6 + rng() * 1.4;
+  const isPine = rng() > 0.48;
 
   const trunk = new THREE.Mesh(trunkGeo, trunkMat);
   trunk.position.set(x, h * 0.45, z);
-  trunk.scale.y = h / 1.8;
+  trunk.scale.y = h / 2.0;
   scene.add(trunk);
 
-  const foliageMat = new THREE.MeshStandardMaterial({
-    color: foliageColors[i % foliageColors.length],
-    roughness: 0.85,
-  });
-  const top = new THREE.Mesh(foliageGeo, foliageMat);
-  top.scale.set(0.85 + rng() * 0.35, 1.1 + rng() * 0.5, 0.85 + rng() * 0.35);
-  top.position.set(x, h * 0.9 + 1.4, z);
-  scene.add(top);
-
-  if (rng() > 0.5) {
-    const top2 = new THREE.Mesh(foliageGeo, foliageMat);
-    top2.scale.setScalar(0.55 + rng() * 0.2);
-    top2.position.set(x + rng() * 0.6, h * 0.9 + 2.8, z + rng() * 0.6);
-    scene.add(top2);
+  if (isPine) {
+    const pineMat = new THREE.MeshStandardMaterial({
+      color: pineColors[i % pineColors.length], roughness: 0.85,
+    });
+    for (let tier = 0; tier < 3; tier++) {
+      const cone = new THREE.Mesh(pineConeGeo, pineMat);
+      const s = 0.9 - tier * 0.22;
+      cone.scale.set(s, 0.8 + tier * 0.05, s);
+      cone.position.set(x, h * 0.75 + tier * 1.0, z);
+      scene.add(cone);
+    }
+  } else {
+    const leafMat = new THREE.MeshStandardMaterial({
+      color: leafColors[i % leafColors.length], roughness: 0.85,
+    });
+    const top = new THREE.Mesh(leafGeo, leafMat);
+    top.scale.set(0.9 + rng() * 0.4, 1.1 + rng() * 0.55, 0.9 + rng() * 0.4);
+    top.position.set(x, h * 0.9 + 1.5, z);
+    scene.add(top);
+    if (rng() > 0.45) {
+      const top2 = new THREE.Mesh(leafGeo, leafMat);
+      top2.scale.setScalar(0.55 + rng() * 0.22);
+      top2.position.set(x + rng() * 0.7, h * 0.9 + 2.9, z + rng() * 0.7);
+      scene.add(top2);
+    }
   }
 }
 
-// ── Scattered pebbles and flowers ─────────────────────────────────────────────
-const pebbleGeo = new THREE.SphereGeometry(0.11, 5, 4);
-const pebbleMat = new THREE.MeshStandardMaterial({ color: 0x9a8878, roughness: 0.9 });
+// ── Grass tufts ───────────────────────────────────────────────────────────────
+const grassGeo  = new THREE.PlaneGeometry(0.18, 0.38);
+const grassMat  = new THREE.MeshBasicMaterial({ color: 0x4aaa2a, side: THREE.DoubleSide });
+const grassInst = new THREE.InstancedMesh(grassGeo, grassMat, 300);
+const dg = new THREE.Object3D();
+const rg = seededRNG(91);
+for (let i = 0; i < 300; i++) {
+  dg.position.set((rg() * 2 - 1) * (WORLD - 1), 0.19, (rg() * 2 - 1) * (WORLD - 1));
+  dg.rotation.y = rg() * Math.PI;
+  dg.rotation.z = (rg() - 0.5) * 0.3;
+  dg.scale.setScalar(0.7 + rg() * 0.8);
+  dg.updateMatrix();
+  grassInst.setMatrixAt(i, dg.matrix);
+}
+grassInst.instanceMatrix.needsUpdate = true;
+scene.add(grassInst);
+
+// Second pass rotated 90° for X-cross look
+const grassInst2 = new THREE.InstancedMesh(grassGeo, grassMat, 300);
+const dg2 = new THREE.Object3D();
+const rg2 = seededRNG(91); // same seed → same positions
+for (let i = 0; i < 300; i++) {
+  dg2.position.set((rg2() * 2 - 1) * (WORLD - 1), 0.19, (rg2() * 2 - 1) * (WORLD - 1));
+  dg2.rotation.y = rg2() * Math.PI + Math.PI / 2;
+  dg2.rotation.z = (rg2() - 0.5) * 0.3;
+  dg2.scale.setScalar(0.7 + rg2() * 0.8);
+  dg2.updateMatrix();
+  grassInst2.setMatrixAt(i, dg2.matrix);
+}
+grassInst2.instanceMatrix.needsUpdate = true;
+scene.add(grassInst2);
+
+// ── Pebbles ───────────────────────────────────────────────────────────────────
+const pebbleGeo  = new THREE.SphereGeometry(0.11, 5, 4);
+const pebbleMat  = new THREE.MeshStandardMaterial({ color: 0x9a8878, roughness: 0.9 });
 const pebbleInst = new THREE.InstancedMesh(pebbleGeo, pebbleMat, 50);
-const dummy = new THREE.Object3D();
+const dp = new THREE.Object3D();
 const rp = seededRNG(77);
 for (let i = 0; i < 50; i++) {
-  dummy.position.set((rp() * 2 - 1) * (WORLD - 1.5), 0.07, (rp() * 2 - 1) * (WORLD - 1.5));
-  dummy.scale.setScalar(0.5 + rp() * 1.0);
-  dummy.rotation.y = rp() * Math.PI * 2;
-  dummy.updateMatrix();
-  pebbleInst.setMatrixAt(i, dummy.matrix);
+  dp.position.set((rp() * 2 - 1) * (WORLD - 1.5), 0.07, (rp() * 2 - 1) * (WORLD - 1.5));
+  dp.scale.setScalar(0.5 + rp() * 1.0);
+  dp.rotation.y = rp() * Math.PI * 2;
+  dp.updateMatrix();
+  pebbleInst.setMatrixAt(i, dp.matrix);
 }
+pebbleInst.instanceMatrix.needsUpdate = true;
 pebbleInst.receiveShadow = true;
 scene.add(pebbleInst);
 
-const flowerColors = [0xffee55, 0xff88bb, 0xffffff, 0xff6644];
+// ── Flowers ───────────────────────────────────────────────────────────────────
+const flowerColors = [0xffee55, 0xff88bb, 0xffffff, 0xff6644, 0xaa77ff];
 const flowerGeo  = new THREE.CircleGeometry(0.18, 5);
 const rf = seededRNG(55);
-for (let i = 0; i < 70; i++) {
-  const mat  = new THREE.MeshBasicMaterial({
+for (let i = 0; i < 90; i++) {
+  const mat = new THREE.MeshBasicMaterial({
     color: flowerColors[i % flowerColors.length],
     side: THREE.DoubleSide,
   });
@@ -267,9 +326,7 @@ gltfLoader.load(
       if (m.isMesh) {
         m.castShadow    = true;
         m.receiveShadow = true;
-        if (m.material) {
-          m.material.needsUpdate = true;
-        }
+        if (m.material) m.material.needsUpdate = true;
       }
     });
     const box  = new THREE.Box3().setFromObject(hedgehogNode);
@@ -286,11 +343,7 @@ gltfLoader.load(
     finishLoad();
   },
   (prog) => { if (prog.total > 0) setProgress(25 + (prog.loaded / prog.total) * 65); },
-  () => {
-    modelReady = true;
-    setProgress(95);
-    finishLoad();
-  }
+  () => { modelReady = true; setProgress(95); finishLoad(); }
 );
 
 loadAudioAsync();
@@ -355,6 +408,8 @@ let hiScore = +localStorage.getItem('hq_hi') || 0;
 let running = false, paused = false;
 let simTime = 0, acc = 0, lastTs = 0;
 let fps = 0, fpsFrames = 0, fpsAt = 0;
+let comboCount = 0, lastCollectTime = -99;
+let moveTime = 0;
 
 const hPos    = new THREE.Vector3();
 const hFacing = new THREE.Quaternion();
@@ -370,10 +425,10 @@ const FOOD_TYPES = [
       const g = new THREE.Group();
       for (let i = 0; i < 3; i++) {
         const m = new THREE.Mesh(
-          new THREE.SphereGeometry(0.2 + Math.random() * 0.08, 10, 8),
+          new THREE.SphereGeometry(0.21 + Math.random() * 0.08, 10, 8),
           new THREE.MeshStandardMaterial({
-            color: 0xcc1a1a, emissive: 0x880000, emissiveIntensity: 0.5,
-            roughness: 0.25, metalness: 0.05,
+            color: 0xcc1a1a, emissive: 0xaa0000, emissiveIntensity: 0.55,
+            roughness: 0.2, metalness: 0.1,
           })
         );
         m.position.set((Math.random() - 0.5) * 0.35, Math.random() * 0.2, (Math.random() - 0.5) * 0.35);
@@ -394,21 +449,24 @@ const FOOD_TYPES = [
       stem.position.y = 0.2;
       g.add(stem);
       const cap = new THREE.Mesh(
-        new THREE.SphereGeometry(0.45, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.SphereGeometry(0.46, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
         new THREE.MeshStandardMaterial({
-          color: 0xff3d00, emissive: 0x661000, emissiveIntensity: 0.4,
-          roughness: 0.5, metalness: 0.05,
+          color: 0xff3d00, emissive: 0x881100, emissiveIntensity: 0.45,
+          roughness: 0.45, metalness: 0.05,
         })
       );
       cap.position.y = 0.5;
       g.add(cap);
-      const spot = new THREE.Mesh(
-        new THREE.CircleGeometry(0.06, 6),
-        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 })
-      );
-      spot.rotation.x = -Math.PI / 2;
-      spot.position.set(0.15, 0.51, 0.1);
-      g.add(spot);
+      for (let s = 0; s < 3; s++) {
+        const spot = new THREE.Mesh(
+          new THREE.CircleGeometry(0.055, 6),
+          new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 })
+        );
+        const a = s * Math.PI * 2 / 3 + 0.3;
+        spot.rotation.x = -Math.PI / 2;
+        spot.position.set(Math.cos(a) * 0.22, 0.52, Math.sin(a) * 0.18);
+        g.add(spot);
+      }
       return g;
     }
   },
@@ -417,7 +475,7 @@ const FOOD_TYPES = [
     make() {
       const g = new THREE.Group();
       const wormMat = new THREE.MeshStandardMaterial({
-        color: 0xff78c8, emissive: 0x660030, emissiveIntensity: 0.45,
+        color: 0xff78c8, emissive: 0x880040, emissiveIntensity: 0.5,
         roughness: 0.4, metalness: 0.0,
       });
       for (let i = 0; i < 5; i++) {
@@ -435,19 +493,19 @@ const FOOD_TYPES = [
     make() {
       const g = new THREE.Group();
       const cob = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.16, 0.12, 0.65, 10),
+        new THREE.CylinderGeometry(0.17, 0.12, 0.68, 10),
         new THREE.MeshStandardMaterial({
-          color: 0xf5c430, emissive: 0x664400, emissiveIntensity: 0.45,
-          roughness: 0.45, metalness: 0.05,
+          color: 0xf5c430, emissive: 0x886600, emissiveIntensity: 0.45,
+          roughness: 0.4, metalness: 0.05,
         })
       );
-      cob.position.y = 0.33;
+      cob.position.y = 0.34;
       g.add(cob);
       const leaf = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.1, 0.32, 6),
+        new THREE.CylinderGeometry(0.04, 0.1, 0.34, 6),
         new THREE.MeshStandardMaterial({ color: 0x4aaa28, roughness: 0.8 })
       );
-      leaf.position.y = 0.78;
+      leaf.position.y = 0.8;
       g.add(leaf);
       return g;
     }
@@ -458,7 +516,7 @@ const FOOD_TYPES = [
       const g = new THREE.Group();
       const nut = new THREE.Mesh(
         new THREE.SphereGeometry(0.22, 10, 8),
-        new THREE.MeshStandardMaterial({ color: 0x8b5e2a, roughness: 0.6 })
+        new THREE.MeshStandardMaterial({ color: 0x8b5e2a, roughness: 0.55, metalness: 0.05 })
       );
       nut.scale.y = 1.3;
       nut.position.y = 0.24;
@@ -502,39 +560,73 @@ function spawnFoodItem() {
 const partGeos = [
   new THREE.SphereGeometry(0.1, 4, 4),
   new THREE.SphereGeometry(0.07, 4, 4),
+  new THREE.TetrahedronGeometry(0.09),
 ];
-const partMats = [0xf5c842, 0xff8c00, 0xee2222, 0x88dd44].map(c =>
-  new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.6, transparent: true })
+const partMats = [0xf5c842, 0xff8c00, 0xee2222, 0x88dd44, 0xff44cc].map(c =>
+  new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.7, transparent: true })
 );
 
 function spawnParticles(x, y, z) {
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 14; i++) {
     const m   = new THREE.Mesh(partGeos[i % partGeos.length], partMats[i % partMats.length].clone());
     m.position.set(x, y, z);
     const vel = new THREE.Vector3(
-      (Math.random() - 0.5) * 5,
-      1.5 + Math.random() * 4.0,
-      (Math.random() - 0.5) * 5
+      (Math.random() - 0.5) * 6,
+      1.8 + Math.random() * 4.5,
+      (Math.random() - 0.5) * 6
     );
     scene.add(m);
-    particles.push({ mesh: m, vel, life: 0.65 + Math.random() * 0.4, age: 0 });
+    particles.push({ mesh: m, vel, life: 0.6 + Math.random() * 0.45, age: 0 });
   }
 }
 
 // ── Sniff rings ───────────────────────────────────────────────────────────────
 const sniffRings = [];
-const sniffRingGeo = new THREE.RingGeometry(0.6, 0.9, 44);
+const sniffRingGeo = new THREE.RingGeometry(0.5, 0.85, 48);
 
-function spawnSniffRing() {
-  const mat  = new THREE.MeshBasicMaterial({
-    color: 0x44ddff, transparent: true, opacity: 0.7,
-    side: THREE.DoubleSide, depthWrite: false,
+function spawnSniffRings() {
+  for (let wave = 0; wave < 3; wave++) {
+    const delay = wave * 0.18;
+    const mat   = new THREE.MeshBasicMaterial({
+      color: wave === 0 ? 0x44ddff : wave === 1 ? 0x88ffcc : 0xffffff,
+      transparent: true, opacity: 0.75,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    const ring = new THREE.Mesh(sniffRingGeo, mat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.18;
+    scene.add(ring);
+    sniffRings.push({ mesh: ring, age: -delay, life: 0.8, delay });
+  }
+}
+
+// ── Sniff arrows ──────────────────────────────────────────────────────────────
+const sniffArrows = [];
+
+function showSniffArrows() {
+  sniffArrows.forEach(a => a.el.remove());
+  sniffArrows.length = 0;
+
+  const near = foodItems.filter(fi => fi.mesh.position.distanceTo(hPos) < SNIFF_RANGE);
+  near.sort((a, b) => a.mesh.position.distanceTo(hPos) - b.mesh.position.distanceTo(hPos));
+
+  near.slice(0, 4).forEach(fi => {
+    const sc = worldToScreen(fi.mesh.position);
+    const cx = innerWidth / 2, cy = innerHeight / 2;
+    const angle = Math.atan2(sc.y - cy, sc.x - cx);
+    const r = Math.min(innerWidth, innerHeight) * 0.36;
+    const ax = cx + Math.cos(angle) * r;
+    const ay = cy + Math.sin(angle) * r;
+
+    const el = document.createElement('div');
+    el.className = 'sniff-arrow';
+    el.style.left = ax + 'px';
+    el.style.top  = ay + 'px';
+    el.style.transform = `translate(-50%,-50%) rotate(${angle * 180 / Math.PI + 90}deg)`;
+    el.dataset.label = fi.type.label;
+    document.body.appendChild(el);
+    sniffArrows.push({ el, age: 0, life: 2.4 });
   });
-  const ring = new THREE.Mesh(sniffRingGeo, mat);
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.18;
-  scene.add(ring);
-  sniffRings.push({ mesh: ring, age: 0, life: 0.75 });
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────────
@@ -619,7 +711,6 @@ function getGamepadAxes() {
 
 // ── Sniff ─────────────────────────────────────────────────────────────────────
 let sniffCooldown = 0;
-const SNIFF_RANGE = 7, SNIFF_CD = 3;
 
 elBtnSniff.addEventListener('pointerdown', e => { e.preventDefault(); doSniff(); });
 elBtnSniff.addEventListener('click', doSniff);
@@ -627,7 +718,8 @@ elBtnSniff.addEventListener('click', doSniff);
 function doSniff() {
   if (!running || sniffCooldown > 0) return;
   sniffCooldown = SNIFF_CD;
-  spawnSniffRing();
+  spawnSniffRings();
+  showSniffArrows();
   foodItems.forEach(fi => {
     if (fi.mesh.position.distanceTo(hPos) < SNIFF_RANGE)
       fi.sniffPhase = 1.5;
@@ -657,10 +749,35 @@ function updateHUD() {
   elScore.textContent = score;
   const pct = Math.max(0, Math.min(1, hunger));
   elFill.style.width = (pct * 100).toFixed(1) + '%';
-  const r = pct > 0.5 ? Math.round((1 - pct) * 2 * 200 + 40)  : 240;
+  const r = pct > 0.5 ? Math.round((1 - pct) * 2 * 200 + 40) : 240;
   const g = pct > 0.5 ? 180 : Math.round(pct * 2 * 150 + 30);
   elFill.style.background = `linear-gradient(90deg,rgb(${r},${g},20),rgb(${Math.min(r+30,255)},${Math.min(g+50,255)},60))`;
-  elBtnSniff.style.opacity = sniffCooldown > 0 ? '0.45' : '1';
+
+  // Sniff button: ready or countdown
+  if (sniffCooldown > 0) {
+    elBtnSniff.style.opacity = '0.5';
+    elBtnSniff.textContent = Math.ceil(sniffCooldown) + 's';
+  } else {
+    elBtnSniff.style.opacity = '1';
+    elBtnSniff.textContent = 'Μύρισε';
+  }
+
+  // Hunger vignette
+  if (elVignette) {
+    const danger = Math.max(0, 0.35 - pct) / 0.35;
+    const pulse  = pct < 0.15 ? Math.abs(Math.sin(simTime * 5)) * 0.4 : 0;
+    elVignette.style.opacity = (danger * 0.75 + pulse).toFixed(3);
+  }
+
+  // Combo display
+  if (elCombo) {
+    if (comboCount >= 2) {
+      elCombo.textContent = `x${comboCount} COMBO`;
+      elCombo.style.display = 'block';
+    } else {
+      elCombo.style.display = 'none';
+    }
+  }
 }
 
 // ── Game flow ─────────────────────────────────────────────────────────────────
@@ -671,6 +788,9 @@ function startGame() {
   hunger = 1.0;
   score  = 0;
   sniffCooldown = 0;
+  comboCount    = 0;
+  lastCollectTime = -99;
+  moveTime = 0;
   running = true;
 
   foodItems.forEach(fi => scene.remove(fi.mesh));
@@ -679,6 +799,8 @@ function startGame() {
   particles.length = 0;
   sniffRings.forEach(sr => scene.remove(sr.mesh));
   sniffRings.length = 0;
+  sniffArrows.forEach(a => a.el.remove());
+  sniffArrows.length = 0;
 
   hPos.set(0, 0, 0);
   hFacing.identity();
@@ -688,6 +810,8 @@ function startGame() {
   for (let i = 0; i < MAX_FOOD; i++) spawnFoodItem();
 
   elOverlay.style.display = 'none';
+  if (elVignette) elVignette.style.opacity = '0';
+  if (elCombo)    elCombo.style.display = 'none';
   lastTs = performance.now();
   startMusic();
 }
@@ -695,14 +819,18 @@ function startGame() {
 function endGame() {
   running = false;
   stopMusic();
+  sniffArrows.forEach(a => a.el.remove());
+  sniffArrows.length = 0;
+  if (elVignette) elVignette.style.opacity = '0';
+  if (elCombo)    elCombo.style.display = 'none';
   if (score > hiScore) { hiScore = score; localStorage.setItem('hq_hi', hiScore); }
 
-  elOvEmoji.textContent  = '😢';
-  elOvTitle.textContent  = 'Πολύ Πεινασμένος!';
-  elOvDesc.textContent   = 'Ο σκαντζόχοιρός σου έμεινε χωρίς φαγητό…';
-  elOvHint.textContent   = '';
-  elOvScore.textContent  = 'Σκορ: ' + score;
-  elOvHi.textContent     = 'Ρεκόρ: ' + hiScore;
+  elOvEmoji.textContent   = '😢';
+  elOvTitle.textContent   = 'Πολύ Πεινασμένος!';
+  elOvDesc.textContent    = 'Ο σκαντζόχοιρός σου έμεινε χωρίς φαγητό…';
+  elOvHint.textContent    = '';
+  elOvScore.textContent   = 'Σκορ: ' + score;
+  elOvHi.textContent      = 'Ρεκόρ: ' + hiScore;
   elOvScore.style.display = '';
   elOvHi.style.display    = '';
   elStartBtn.textContent  = 'Παίξε Ξανά';
@@ -727,11 +855,17 @@ function update(dt) {
   const moving = ilen > 0.05;
 
   if (moving) {
-    hPos.x = Math.max(-WORLD, Math.min(WORLD, hPos.x + ix * SPEED * dt));
-    hPos.z = Math.max(-WORLD, Math.min(WORLD, hPos.z + iz * SPEED * dt));
+    moveTime = Math.min(moveTime + dt, 1.5);
+  } else {
+    moveTime = Math.max(0, moveTime - dt * 2);
+  }
+  const speedMult = 1 + (SPEED_RAMP - 1) * (moveTime / 1.5);
+
+  if (moving) {
+    hPos.x = Math.max(-WORLD, Math.min(WORLD, hPos.x + ix * SPEED * speedMult * dt));
+    hPos.z = Math.max(-WORLD, Math.min(WORLD, hPos.z + iz * SPEED * speedMult * dt));
     const targetAngle = Math.atan2(-ix, -iz);
-    const targetQ     = new THREE.Quaternion().setFromAxisAngle(upVec, targetAngle);
-    hFacing.slerp(targetQ, 1 - Math.pow(0.005, dt));
+    hFacing.setFromAxisAngle(upVec, targetAngle);
   }
 
   const bob = moving ? Math.sin(simTime * 9) * 0.09 : 0;
@@ -742,7 +876,7 @@ function update(dt) {
   }
 
   const targetCamPos = new THREE.Vector3(hPos.x, 0, hPos.z).add(CAM_OFFSET);
-  camera.position.lerp(targetCamPos, 1 - Math.pow(0.004, dt));
+  camera.position.lerp(targetCamPos, 1 - Math.pow(0.003, dt));
   camLookTarget.set(hPos.x, 0.5, hPos.z);
   camera.lookAt(camLookTarget);
 
@@ -752,31 +886,53 @@ function update(dt) {
   for (let i = sniffRings.length - 1; i >= 0; i--) {
     const sr = sniffRings[i];
     sr.age += dt;
+    if (sr.age < 0) continue;
     const t = sr.age / sr.life;
     if (t >= 1) { scene.remove(sr.mesh); sniffRings.splice(i, 1); continue; }
-    const scale = t * (SNIFF_RANGE / 0.75);
+    const scale = t * (SNIFF_RANGE / 0.7);
     sr.mesh.position.x = hPos.x;
     sr.mesh.position.z = hPos.z;
     sr.mesh.scale.setScalar(scale);
-    sr.mesh.material.opacity = (1 - t) * 0.65;
+    sr.mesh.material.opacity = Math.sin(t * Math.PI) * 0.65;
   }
 
+  // Sniff arrow fade
+  for (let i = sniffArrows.length - 1; i >= 0; i--) {
+    const sa = sniffArrows[i];
+    sa.age += dt;
+    if (sa.age >= sa.life) { sa.el.remove(); sniffArrows.splice(i, 1); continue; }
+    sa.el.style.opacity = (1 - sa.age / sa.life).toFixed(3);
+  }
+
+  // Food update + collection
   for (let i = foodItems.length - 1; i >= 0; i--) {
     const fi = foodItems[i];
-    fi.mesh.position.y = fi.baseY + Math.sin(simTime * 2.1 + fi.phase) * 0.15;
-    fi.mesh.rotation.y += dt * 1.1;
+    fi.mesh.position.y = fi.baseY + Math.sin(simTime * 2.1 + fi.phase) * 0.16;
+    fi.mesh.rotation.y += dt * 1.2;
     if (fi.sniffPhase > 0) {
       fi.sniffPhase -= dt * 3;
-      fi.mesh.position.y += Math.sin(fi.sniffPhase * Math.PI) * 0.7;
+      fi.mesh.position.y += Math.sin(fi.sniffPhase * Math.PI) * 0.8;
     }
     const dx = fi.mesh.position.x - hPos.x;
     const dz = fi.mesh.position.z - hPos.z;
     if (Math.hypot(dx, dz) < COLLECT_R) {
-      const sc = worldToScreen(fi.mesh.position);
-      showPop('+' + fi.type.pts, sc.x, sc.y);
+      const sc  = worldToScreen(fi.mesh.position);
+
+      // Combo
+      const now = simTime;
+      if (now - lastCollectTime < COMBO_WINDOW) {
+        comboCount++;
+      } else {
+        comboCount = 1;
+      }
+      lastCollectTime = now;
+      const multiplier = comboCount >= 3 ? 3 : comboCount >= 2 ? 2 : 1;
+      const pts = fi.type.pts * multiplier;
+
+      showPop((multiplier > 1 ? `x${multiplier} ` : '') + '+' + pts, sc.x, sc.y);
       showPop(fi.type.label, sc.x, sc.y + 28, 'food-name-pop');
       spawnParticles(fi.mesh.position.x, fi.mesh.position.y, fi.mesh.position.z);
-      score  += fi.type.pts;
+      score  += pts;
       hunger  = Math.min(1, hunger + RESTORE);
       playSfx();
       scene.remove(fi.mesh);
@@ -787,6 +943,7 @@ function update(dt) {
 
   while (foodItems.length < MAX_FOOD) spawnFoodItem();
 
+  // Particles
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.age += dt;
@@ -809,7 +966,7 @@ function update(dt) {
     if (now - fpsAt >= 500) {
       fps = Math.round(fpsFrames * 1000 / (now - fpsAt));
       fpsFrames = 0; fpsAt = now;
-      elDev.textContent = `${fps} fps  food:${foodItems.length}  parts:${particles.length}`;
+      elDev.textContent = `${fps} fps  food:${foodItems.length}  parts:${particles.length}  combo:${comboCount}`;
     }
   }
 }
