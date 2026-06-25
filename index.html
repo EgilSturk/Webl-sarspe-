@@ -57,11 +57,30 @@ canvas{display:block;}
 #dev{position:fixed;top:4px;left:4px;color:#0f0;font-family:monospace;font-size:.7em;
   display:none;pointer-events:none;z-index:30;}
 
+/* Hunger vignette */
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:9;opacity:0;
+  background:radial-gradient(ellipse at center,transparent 45%,rgba(200,0,0,.85) 100%);
+  transition:opacity .1s;}
+
+/* Combo display */
+#combo{position:fixed;top:86px;left:50%;transform:translateX(-50%);
+  background:rgba(255,180,0,.9);border-radius:20px;padding:4px 16px;
+  color:#000;font-family:sans-serif;font-weight:bold;font-size:1em;
+  display:none;pointer-events:none;z-index:8;letter-spacing:.05em;}
+
 /* Score pop-ups */
 .score-pop{position:fixed;color:#ffd700;font-family:sans-serif;font-weight:bold;
   font-size:1.1em;pointer-events:none;z-index:15;
   animation:popUp .95s ease-out forwards;}
 @keyframes popUp{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-48px)}}
+
+/* Sniff direction arrows */
+.sniff-arrow{position:fixed;pointer-events:none;z-index:12;
+  width:0;height:0;
+  border-left:10px solid transparent;
+  border-right:10px solid transparent;
+  border-bottom:22px solid rgba(68,221,255,.92);
+  filter:drop-shadow(0 0 4px #44ddff);}
 </style>
 </head>
 <body>
@@ -93,6 +112,12 @@ canvas{display:block;}
   <div id="load-msg">Φόρτωση σκαντζόχοιρου…</div>
   <div id="prog-wrap"><div id="prog-fill"></div></div>
 </div>
+
+<!-- Hunger vignette -->
+<div id="vignette"></div>
+
+<!-- Combo display -->
+<div id="combo"></div>
 
 <!-- Dev info -->
 <div id="dev"></div>
