@@ -8,75 +8,94 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:#000;overflow:hidden;touch-action:none;}
 canvas{display:block;}
-#ui{position:fixed;top:0;left:0;width:100%;pointer-events:none;}
+
+/* HUD */
 #score-box{position:fixed;top:12px;left:50%;transform:translateX(-50%);
   background:rgba(0,0,0,.55);border-radius:12px;padding:6px 18px;
-  color:#fff;font-family:sans-serif;font-size:1.1em;text-align:center;white-space:nowrap;}
-#hunger-bar-wrap{position:fixed;top:54px;left:50%;transform:translateX(-50%);
-  width:min(260px,70vw);background:rgba(0,0,0,.4);border-radius:8px;padding:4px 10px;}
+  color:#fff;font-family:sans-serif;font-size:1.1em;text-align:center;white-space:nowrap;
+  pointer-events:none;}
+#hunger-wrap{position:fixed;top:54px;left:50%;transform:translateX(-50%);
+  width:min(260px,70vw);background:rgba(0,0,0,.4);border-radius:8px;padding:4px 10px;
+  pointer-events:none;}
 #hunger-label{color:#ffd700;font-family:sans-serif;font-size:.75em;text-align:center;letter-spacing:.05em;}
-#hunger-bar{height:10px;border-radius:5px;background:#e74c3c;width:100%;transition:width .2s,background .2s;}
-#controls{position:fixed;bottom:0;left:0;width:100%;display:flex;
-  justify-content:space-between;align-items:flex-end;padding:18px;pointer-events:none;}
-#joy-base{width:110px;height:110px;border-radius:50%;
+#hunger-fill{height:10px;border-radius:5px;background:#27ae60;width:100%;transition:width .2s,background .2s;}
+
+/* Controls — hidden until touch detected */
+#joy-base{position:fixed;bottom:24px;left:24px;width:110px;height:110px;border-radius:50%;
   background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);
-  position:relative;pointer-events:auto;touch-action:none;flex-shrink:0;}
+  display:none;touch-action:none;}
 #joy-knob{width:44px;height:44px;border-radius:50%;
   background:rgba(255,255,255,.55);border:2px solid rgba(255,255,255,.8);
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
-#btn-sniff{width:80px;height:80px;border-radius:50%;
+#btn-sniff{position:fixed;bottom:24px;right:24px;width:80px;height:80px;border-radius:50%;
   background:rgba(255,200,50,.35);border:2px solid rgba(255,200,50,.6);
   color:#fff;font-family:sans-serif;font-size:.8em;text-align:center;line-height:80px;
-  pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;flex-shrink:0;}
+  display:none;touch-action:none;user-select:none;-webkit-user-select:none;}
+
+/* Start / End overlay */
 #overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   color:#fff;font-family:sans-serif;text-align:center;padding:24px;z-index:10;}
-#overlay h1{font-size:2em;margin-bottom:.4em;color:#ffd700;}
-#overlay p{font-size:1.1em;margin-bottom:.5em;opacity:.9;}
-#overlay small{font-size:.85em;opacity:.65;margin-bottom:1.4em;display:block;}
+#ov-emoji{font-size:3em;margin-bottom:.2em;}
+#ov-title{font-size:2em;margin-bottom:.4em;color:#ffd700;}
+#ov-desc{font-size:1.05em;margin-bottom:.5em;opacity:.9;}
+#ov-hint{font-size:.82em;opacity:.62;margin-bottom:1.3em;display:block;}
+#ov-score{font-size:1.35em;margin-bottom:.2em;display:none;}
+#ov-hi{font-size:1em;opacity:.72;margin-bottom:1.3em;display:none;}
 #start-btn{padding:14px 38px;font-size:1.15em;border-radius:30px;border:none;
   background:#e67e22;color:#fff;cursor:pointer;font-family:sans-serif;}
-#load-msg{margin-top:18px;font-size:.9em;opacity:.6;}
-#end-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);
-  display:none;flex-direction:column;align-items:center;justify-content:center;
-  color:#fff;font-family:sans-serif;text-align:center;padding:24px;z-index:11;}
-#end-overlay h2{font-size:2em;color:#e74c3c;margin-bottom:.3em;}
-#end-overlay p{font-size:1em;opacity:.8;margin-bottom:.8em;}
-#end-score{font-size:1.4em;margin-bottom:.2em;}
-#end-best{font-size:1em;opacity:.7;margin-bottom:1.4em;}
-#restart-btn{padding:13px 34px;font-size:1.1em;border-radius:28px;border:none;
-  background:#27ae60;color:#fff;cursor:pointer;font-family:sans-serif;}
+
+/* Loading screen (sits on top of overlay while assets load) */
+#loading{position:fixed;inset:0;background:rgba(0,0,0,.88);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:#fff;font-family:sans-serif;z-index:20;}
+#load-msg{font-size:1em;opacity:.7;margin-bottom:14px;}
+#prog-wrap{width:min(220px,60vw);height:6px;background:rgba(255,255,255,.2);border-radius:3px;}
+#prog-fill{height:100%;width:0;background:#e67e22;border-radius:3px;transition:width .15s;}
+
+/* Dev overlay */
+#dev{position:fixed;top:4px;left:4px;color:#0f0;font-family:monospace;font-size:.7em;
+  display:none;pointer-events:none;z-index:30;}
+
+/* Score pop-ups */
+.score-pop{position:fixed;color:#ffd700;font-family:sans-serif;font-weight:bold;
+  font-size:1.1em;pointer-events:none;z-index:15;
+  animation:popUp .95s ease-out forwards;}
+@keyframes popUp{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-48px)}}
 </style>
 </head>
 <body>
-<div id="ui">
-  <div id="score-box">Σκορ: <span id="score">0</span></div>
-  <div id="hunger-bar-wrap">
-    <div id="hunger-label">ΠΕΙΝΑ</div>
-    <div id="hunger-bar"></div>
-  </div>
+
+<!-- HUD -->
+<div id="score-box">Σκορ: <span id="score">0</span></div>
+<div id="hunger-wrap">
+  <div id="hunger-label">ΠΕΙΝΑ</div>
+  <div id="hunger-fill"></div>
 </div>
 
-<div id="controls">
-  <div id="joy-base"><div id="joy-knob"></div></div>
-  <div id="btn-sniff">Μύρισε</div>
-</div>
+<!-- Controls -->
+<div id="joy-base"><div id="joy-knob"></div></div>
+<div id="btn-sniff">Μύρισε</div>
 
+<!-- Start / End overlay -->
 <div id="overlay">
-  <h1>Σκαντζόχοιρος Αναζητά Τροφή</h1>
-  <p>Βρες φαγητό πριν ξεμείνεις από πείνα!</p>
-  <small>Χρησιμοποίησε το joystick για να κινηθείς · «Μύρισε» για να βρεις φαγητό</small>
+  <div id="ov-emoji">🦔</div>
+  <h1 id="ov-title">Σκαντζόχοιρος Αναζητά Τροφή</h1>
+  <p id="ov-desc">Βρες φαγητό πριν ξεμείνεις από πείνα!</p>
+  <small id="ov-hint">Χρησιμοποίησε το joystick για να κινηθείς · «Μύρισε» για να βρεις φαγητό</small>
+  <div id="ov-score"></div>
+  <div id="ov-hi"></div>
   <button id="start-btn">Παίξε</button>
-  <div id="load-msg">Φόρτωση σκαντζόχοιρου…</div>
 </div>
 
-<div id="end-overlay">
-  <h2 id="end-title">Πολύ Πεινασμένος!</h2>
-  <p id="end-sub">Ο σκαντζόχοιρός σου έμεινε χωρίς φαγητό…</p>
-  <div id="end-score">Σκορ: <span id="final-score">0</span></div>
-  <div id="end-best">Ρεκόρ: <span id="best-score">0</span></div>
-  <button id="restart-btn">Παίξε Ξανά</button>
+<!-- Loading screen (hides when assets finish loading) -->
+<div id="loading">
+  <div id="load-msg">Φόρτωση σκαντζόχοιρου…</div>
+  <div id="prog-wrap"><div id="prog-fill"></div></div>
 </div>
+
+<!-- Dev info -->
+<div id="dev"></div>
 
 <script src="./assets/bundle.js"></script>
 </body>
