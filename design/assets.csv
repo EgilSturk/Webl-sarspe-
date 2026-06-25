@@ -1,0 +1,7 @@
+id,role,type,description,size/ratio,style line ref,source
+hedge_glb,player 3D character,3D mesh,spiky honey-brown hedgehog creature,n/a,warm honey-brown and cream tones that pop against green surroundings,reference_media[0]
+ground_tex,terrain tile,texture,seamless lush emerald-green meadow grass with tiny wildflowers and warm chestnut soil patches,1:1,rich emerald-green grass with warm chestnut earth shadows,generate
+thumbnail,16:9 game card,background,cute honey-brown hedgehog in sunlit emerald meadow with colorful crimson berries and orange mushrooms scattered around,16:9,FORMULA,generate
+favicon,1:1 game icon,sprite,cute round hedgehog with spiky back and tiny eyes on magenta background,1:1,FORMULA,generate
+music_bg,background music,audio,cheerful whimsical outdoor adventure music for cute hedgehog foraging in sunny meadow,30s,n/a,generate
+sfx_collect,food collect sound,audio,short cheerful magical food pickup chime bright sparkle ping,1s,n/a,generate
