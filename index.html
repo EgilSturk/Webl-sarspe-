@@ -71,16 +71,32 @@ canvas{display:block;position:fixed;inset:0;z-index:0}
 
 <div id="dev"></div>
 
+<script>
+// Non-module emergency fallback — if ES module never executes, show reload prompt
+(function(){
+  var t=setTimeout(function(){
+    var el=document.getElementById('loading');
+    var msg=document.getElementById('load-msg');
+    if(el&&msg&&el.style.display!=='none'){
+      msg.textContent='Tap here to start';
+      el.style.cursor='pointer';
+      el.addEventListener('click',function(){location.reload();});
+    }
+  },5000);
+  window.__emergencyTimer=t;
+})();
+</script>
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from './assets/vendor/GLTFLoader.js';
 
+clearTimeout(window.__emergencyTimer);
 const _elMsg = document.getElementById('load-msg');
 window.onerror = (_m, _s, _l, _c, err) => { if (_elMsg) _elMsg.textContent = 'Error: ' + (err?.message || _m); };
 window.addEventListener('unhandledrejection', e => { if (_elMsg) _elMsg.textContent = 'Error: ' + e.reason; });
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const HEDGEHOG_URL  = 'https://raw.githubusercontent.com/egilsturk/webl-sarspe-/claude/hedgehog-browser-game-27v6a7/assets/hedgehog.glb';
+const HEDGEHOG_URL  = './assets/hedgehog.glb';
 const GROUND_TEX_URL = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141421_6abab39d-6fa3-4dfc-ba52-0fda3bfe5530.png';
 const MUSIC_URL     = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141450_8c0d6f66-dfa9-49f9-9072-ed7afc41516c.m4a';
 const COLLECT_URL   = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141452_d51b6392-abad-4eff-ac73-df6076365ec5.mp3';
