@@ -254,14 +254,14 @@ function makeGrassBladeTexture(seed) {
 }
 
 {
-  const COUNT = 2200;
+  const COUNT = 4000;
   // Two texture variants for subtle colour variation
   [makeGrassBladeTexture(91), makeGrassBladeTexture(97)].forEach((tex, ti) => {
     const mat = new THREE.MeshBasicMaterial({
       map: tex, transparent: true, alphaTest: 0.08,
-      side: THREE.DoubleSide,
+      side: THREE.DoubleSide, depthWrite: false,
     });
-    const geo = new THREE.PlaneGeometry(0.62, 0.68);
+    const geo = new THREE.PlaneGeometry(0.66, 0.72);
     const half = COUNT / 2;
     const inst = new THREE.InstancedMesh(geo, mat, half * 2);
     const d = new THREE.Object3D(), rg = seededRNG(91 + ti * 13);
@@ -392,6 +392,7 @@ function makeProcHedgehog() {
 // ── GLB loader ────────────────────────────────────────────────────────────────
 let hedgehogNode = null;
 let procHedgehog = makeProcHedgehog();
+procHedgehog.traverse(m => { if (m.isMesh) m.renderOrder = 1; });
 scene.add(procHedgehog);
 let modelReady = false;
 
@@ -401,7 +402,7 @@ gltfLoader.load(HEDGEHOG_URL,
   (gltf) => {
     hedgehogNode = gltf.scene;
     hedgehogNode.traverse(m => {
-      if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; if (m.material) m.material.needsUpdate = true; }
+      if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.renderOrder = 1; if (m.material) m.material.needsUpdate = true; }
     });
     const box = new THREE.Box3().setFromObject(hedgehogNode);
     const s   = 1.9 / Math.max(...box.getSize(new THREE.Vector3()).toArray());
