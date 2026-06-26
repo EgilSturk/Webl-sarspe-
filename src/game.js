@@ -227,47 +227,49 @@ new GLTFLoader().load(TREE_URL, (gltf) => {
   placeTreesFromTemplate(gltf.scene);
 });
 
-// ── Grass tufts (cross-quad pairs — placeholder until 3D model loads) ────────
-let grassInst = null;
+// ── Grass — dense cross-quad InstancedMesh for full ground coverage ───────────
 {
-  const qGeo = new THREE.PlaneGeometry(0.22, 0.44);
-  const qMat = new THREE.MeshStandardMaterial({ color: 0x4aaa28, roughness: 0.85, side: THREE.DoubleSide });
-  const COUNT = 500;
-  grassInst = new THREE.InstancedMesh(qGeo, qMat, COUNT * 2);
-  const d = new THREE.Object3D(), rg = seededRNG(91);
-  for (let i = 0; i < COUNT; i++) {
-    const px = (rg() * 2 - 1) * (WORLD - 1.2), pz = (rg() * 2 - 1) * (WORLD - 1.2);
-    const sc = 0.7 + rg() * 0.9, ry = rg() * Math.PI;
-    for (let c = 0; c < 2; c++) {
-      d.position.set(px, 0.22 * sc, pz);
-      d.rotation.set(0, ry + c * Math.PI / 2, 0);
-      d.scale.setScalar(sc);
-      d.updateMatrix(); grassInst.setMatrixAt(i * 2 + c, d.matrix);
+  const geo = new THREE.PlaneGeometry(0.2, 0.52);
+  const COUNT = 2000;
+  const grassColors = [0x3aaa20, 0x2e9a18, 0x48b828, 0x3d9c1c, 0x52aa24];
+  grassColors.forEach((col, ci) => {
+    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.8, side: THREE.DoubleSide });
+    const inst = new THREE.InstancedMesh(geo, mat, (COUNT / grassColors.length) * 2);
+    const d = new THREE.Object3D(), rg = seededRNG(91 + ci * 7);
+    const perColor = COUNT / grassColors.length;
+    for (let i = 0; i < perColor; i++) {
+      const px = (rg() * 2 - 1) * (WORLD - 0.8), pz = (rg() * 2 - 1) * (WORLD - 0.8);
+      const sc = 0.6 + rg() * 1.1, ry = rg() * Math.PI;
+      for (let c = 0; c < 2; c++) {
+        d.position.set(px, 0.26 * sc, pz);
+        d.rotation.set(0, ry + c * Math.PI / 2, 0);
+        d.scale.setScalar(sc);
+        d.updateMatrix(); inst.setMatrixAt(i * 2 + c, d.matrix);
+      }
     }
-  }
-  grassInst.instanceMatrix.needsUpdate = true;
-  scene.add(grassInst);
+    inst.instanceMatrix.needsUpdate = true;
+    scene.add(inst);
+  });
 }
 
-// ── 3D Grass (replaces cross-quad placeholders when GLB loads) ─────────────────
+// ── 3D Grass accents (on top of instanced coverage) ──────────────────────────
 new GLTFLoader().load(GRASS_GLB_URL, (gltf) => {
-  if (grassInst) { scene.remove(grassInst); grassInst = null; }
   const bbox = new THREE.Box3().setFromObject(gltf.scene);
   const sz   = bbox.getSize(new THREE.Vector3());
-  const baseScale = 0.55 / Math.max(sz.x, sz.y, sz.z);
+  const baseScale = 0.6 / Math.max(sz.x, sz.y, sz.z);
   gltf.scene.traverse(m => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = false; } });
-  const rg3 = seededRNG(91);
-  for (let i = 0; i < 140; i++) {
+  const rg3 = seededRNG(94);
+  for (let i = 0; i < 90; i++) {
     const px = (rg3() * 2 - 1) * (WORLD - 1.5);
     const pz = (rg3() * 2 - 1) * (WORLD - 1.5);
     const clone = gltf.scene.clone(true);
-    clone.scale.setScalar(baseScale * (0.55 + rg3() * 0.9));
+    clone.scale.setScalar(baseScale * (0.5 + rg3() * 1.0));
     const cb = new THREE.Box3().setFromObject(clone);
     clone.position.set(px, -cb.min.y, pz);
     clone.rotation.y = rg3() * Math.PI * 2;
     scene.add(clone);
   }
-}, undefined, () => { /* keep cross-quad fallback */ });
+}, undefined, () => { /* accent only, no fallback needed */ });
 
 // ── 3D Rocks + collision ──────────────────────────────────────────────────────
 const rockObstacles = []; // { x, z, r }
