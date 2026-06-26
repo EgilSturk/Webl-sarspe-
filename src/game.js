@@ -68,7 +68,18 @@ scene.fog = new THREE.FogExp2(0x8ec8e8, 0.013);
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 90);
-const CAM_OFFSET = new THREE.Vector3(0, 13, 10);
+const CAM_PRESETS = [
+  new THREE.Vector3(0, 13, 10),   // default follow
+  new THREE.Vector3(0, 20, 5),    // high overhead
+  new THREE.Vector3(0, 7, 9.5),   // low cinematic
+  new THREE.Vector3(0, 27, 1),    // near bird's-eye
+];
+let camPresetIdx = 0;
+let CAM_OFFSET = CAM_PRESETS[0].clone();
+function cycleCameraAngle() {
+  camPresetIdx = (camPresetIdx + 1) % CAM_PRESETS.length;
+  CAM_OFFSET.copy(CAM_PRESETS[camPresetIdx]);
+}
 camera.position.copy(CAM_OFFSET);
 camera.lookAt(0, 0, 0);
 const camLookTarget = new THREE.Vector3();
@@ -120,17 +131,48 @@ scene.add(skyFill);
 scene.add(new THREE.HemisphereLight(0x9ddcf0, 0x5aaa38, 0.5));
 
 // ── Ground ────────────────────────────────────────────────────────────────────
-const texLoader = new THREE.TextureLoader();
-function buildGround(tex) {
-  let mat;
-  if (tex) {
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(10, 10);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
-  } else {
-    mat = new THREE.MeshStandardMaterial({ color: 0x3d7a30, roughness: 0.9 });
+function makeDirtGrassTexture() {
+  const sz = 512, cv = document.createElement('canvas');
+  cv.width = cv.height = sz;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#3d2610';
+  ctx.fillRect(0, 0, sz, sz);
+  for (let i = 0; i < 900; i++) {
+    const x = Math.random() * sz, y = Math.random() * sz, r = 10 + Math.random() * 35;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    const gr = 90 + (Math.random() * 40 | 0), gg = 130 + (Math.random() * 50 | 0);
+    g.addColorStop(0, `rgba(${gr},${gg},25,0.72)`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
   }
+  for (let i = 0; i < 250; i++) {
+    const x = Math.random() * sz, y = Math.random() * sz, r = 3 + Math.random() * 14;
+    const br = 65 + (Math.random() * 35 | 0);
+    ctx.fillStyle = `rgba(${br},${Math.random() * 25 + 15 | 0},8,0.5)`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(7, 7);
+  return tex;
+}
+
+const texLoader = new THREE.TextureLoader();
+{
+  // Outer dirt ring — wider than playing field, always visible
+  const dirtMat = new THREE.MeshStandardMaterial({ color: 0x3d2610, roughness: 0.95 });
+  const dirtPlane = new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 2 + 30, WORLD * 2 + 30), dirtMat);
+  dirtPlane.rotation.x = -Math.PI / 2;
+  dirtPlane.position.y = -0.015;
+  dirtPlane.receiveShadow = true;
+  scene.add(dirtPlane);
+}
+function buildGround(tex) {
+  const mat = tex
+    ? (tex.wrapS = tex.wrapT = THREE.RepeatWrapping, tex.repeat.set(8, 8),
+       tex.colorSpace = THREE.SRGBColorSpace,
+       new THREE.MeshStandardMaterial({ map: tex, roughness: 0.88 }))
+    : new THREE.MeshStandardMaterial({ map: makeDirtGrassTexture(), roughness: 0.9 });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 2, WORLD * 2), mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.receiveShadow = true;
@@ -169,18 +211,6 @@ function placeTreesFromTemplate(template) {
     treeObstacles.push({ x: pos.x, z: pos.z, r: 0.6 });
   }
 
-  // ── A few large trees at boundary for visual depth ─────────────────────────
-  for (let i = 0; i < 8; i++) {
-    const a   = (i / 8) * Math.PI * 2 + rng() * 0.4;
-    const rad = WORLD + 1.5 + rng() * 3.0;
-    const clone = template.clone(true);
-    const s = baseScale * (1.0 + rng() * 0.5);
-    clone.scale.setScalar(s);
-    const cb = new THREE.Box3().setFromObject(clone);
-    clone.position.set(Math.cos(a) * rad, -cb.min.y, Math.sin(a) * rad);
-    clone.rotation.y = rng() * Math.PI * 2;
-    scene.add(clone);
-  }
 }
 
 // Procedural fallback trees (removed when GLB loads)
@@ -272,7 +302,8 @@ new GLTFLoader().load(GRASS_GLB_URL, (gltf) => {
   }
 }, undefined, () => { /* keep cross-quad fallback */ });
 
-// ── 3D Rocks ─────────────────────────────────────────────────────────────────
+// ── 3D Rocks + collision ──────────────────────────────────────────────────────
+const rockObstacles = []; // { x, z, r }
 new GLTFLoader().load(ROCK_GLB_URL, (gltf) => {
   const template = gltf.scene;
   const bbox = new THREE.Box3().setFromObject(template);
@@ -297,8 +328,9 @@ new GLTFLoader().load(ROCK_GLB_URL, (gltf) => {
     clone.position.set(pos.x, -cb.min.y, pos.z);
     clone.rotation.y = rng() * Math.PI * 2;
     scene.add(clone);
+    rockObstacles.push({ x: pos.x, z: pos.z, r: 0.45 * s / baseScale });
   }
-}, undefined, () => { /* rocks are decorative, no fallback needed */ });
+}, undefined, () => { /* rocks optional, no fallback needed */ });
 
 // ── Pebbles ───────────────────────────────────────────────────────────────────
 const pebbleInst = new THREE.InstancedMesh(
@@ -658,6 +690,7 @@ const held    = new Set();
 addEventListener('keydown', e => {
   const c = KEY_MAP[e.code]; if (c) { held.add(c); e.preventDefault(); }
   if (e.code === 'Space') { doSniff(); e.preventDefault(); }
+  if (e.code === 'KeyC') { cycleCameraAngle(); }
 });
 addEventListener('keyup', e => { const c = KEY_MAP[e.code]; if (c) held.delete(c); });
 
@@ -690,6 +723,21 @@ elJoyBase.addEventListener('pointerdown', e => {
 elJoyBase.addEventListener('pointermove', e => { if (e.pointerId === joyPointerId) moveJoy(e.clientX, e.clientY); });
 elJoyBase.addEventListener('pointerup',     e => { if (e.pointerId === joyPointerId) resetJoy(); });
 elJoyBase.addEventListener('pointercancel', e => { if (e.pointerId === joyPointerId) resetJoy(); });
+
+// ── Two-finger camera cycle (touches on the canvas, not joystick/sniff button) ─
+{
+  const canvasTouches = new Set();
+  let lastCamCycle = 0;
+  renderer.domElement.addEventListener('pointerdown', e => {
+    canvasTouches.add(e.pointerId);
+    if (canvasTouches.size >= 2) {
+      const now = performance.now();
+      if (now - lastCamCycle > 500) { lastCamCycle = now; cycleCameraAngle(); }
+    }
+  });
+  renderer.domElement.addEventListener('pointerup',     e => canvasTouches.delete(e.pointerId));
+  renderer.domElement.addEventListener('pointercancel', e => canvasTouches.delete(e.pointerId));
+}
 
 function getGamepadAxes() {
   let x = 0, z = 0;
@@ -835,11 +883,21 @@ function update(dt) {
     // Nose always faces movement direction (instant)
     hFacing.setFromAxisAngle(upVec, Math.atan2(ix, iz));
   }
-  // Tree collision: push hedgehog out of tree trunks
+  // Tree + rock collision: push hedgehog out of solid obstacles
   for (const obs of treeObstacles) {
     const dx = hPos.x - obs.x, dz = hPos.z - obs.z;
     const dist2 = dx * dx + dz * dz;
     const minD  = obs.r + 0.45;
+    if (dist2 < minD * minD && dist2 > 0.0001) {
+      const inv = minD / Math.sqrt(dist2);
+      hPos.x = obs.x + dx * inv;
+      hPos.z = obs.z + dz * inv;
+    }
+  }
+  for (const obs of rockObstacles) {
+    const dx = hPos.x - obs.x, dz = hPos.z - obs.z;
+    const dist2 = dx * dx + dz * dz;
+    const minD  = obs.r + 0.4;
     if (dist2 < minD * minD && dist2 > 0.0001) {
       const inv = minD / Math.sqrt(dist2);
       hPos.x = obs.x + dx * inv;
