@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 clearTimeout(window.__emergencyTimer);
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const HEDGEHOG_URL   = './assets/hedgehog.glb';
 const TREE_URL       = './assets/tree.glb';
+const GRASS_URL      = './assets/grass.glb';
 const GROUND_TEX_URL = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141421_6abab39d-6fa3-4dfc-ba52-0fda3bfe5530.png';
 const MUSIC_URL      = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141450_8c0d6f66-dfa9-49f9-9072-ed7afc41516c.m4a';
 const COLLECT_URL    = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141452_d51b6392-abad-4eff-ac73-df6076365ec5.mp3';
@@ -135,53 +137,7 @@ function buildGround(tex) {
 }
 texLoader.load(GROUND_TEX_URL, buildGround, undefined, () => buildGround(null));
 
-// ── Trees + collision obstacles ────────────────────────────────────────────────
-const treeObstacles = []; // { x, z, r } — filled when trees are placed
-
-function placeTreesFromTemplate(template) {
-  const bbox = new THREE.Box3().setFromObject(template);
-  const sz   = bbox.getSize(new THREE.Vector3());
-  const baseScale = 5.0 / sz.y;
-  template.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; } });
-
-  const rng = seededRNG(42);
-
-  // ── Inner trees (on the playing field) ────────────────────────────────────
-  const innerPositions = [];
-  for (let attempt = 0; attempt < 200 && innerPositions.length < 14; attempt++) {
-    const a = rng() * Math.PI * 2;
-    const r = 5 + rng() * (WORLD - 8);
-    const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    // Minimum separation between trees
-    if (innerPositions.some(p => (p.x - x) ** 2 + (p.z - z) ** 2 < 25)) continue;
-    innerPositions.push({ x, z });
-  }
-  for (const pos of innerPositions) {
-    const clone = template.clone(true);
-    const s = baseScale * (0.7 + rng() * 0.5);
-    clone.scale.setScalar(s);
-    const cb = new THREE.Box3().setFromObject(clone);
-    clone.position.set(pos.x, -cb.min.y, pos.z);
-    clone.rotation.y = rng() * Math.PI * 2;
-    scene.add(clone);
-    treeObstacles.push({ x: pos.x, z: pos.z, r: 0.65 });
-  }
-
-  // ── Boundary trees (backdrop, no collision) ────────────────────────────────
-  for (let i = 0; i < 14; i++) {
-    const a   = (i / 14) * Math.PI * 2 + rng() * 0.25;
-    const rad = WORLD + 2.0 + rng() * 4.0;
-    const clone = template.clone(true);
-    const s = baseScale * (0.85 + rng() * 0.6);
-    clone.scale.setScalar(s);
-    const cb = new THREE.Box3().setFromObject(clone);
-    clone.position.set(Math.cos(a) * rad, -cb.min.y, Math.sin(a) * rad);
-    clone.rotation.y = rng() * Math.PI * 2;
-    scene.add(clone);
-  }
-}
-
-// Procedural fallback trees (removed when GLB loads)
+// ── Trees ─────────────────────────────────────────────────────────────────────
 const treeGroup = new THREE.Group();
 {
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.95 });
@@ -225,60 +181,88 @@ const treeGroup = new THREE.Group();
 scene.add(treeGroup);
 new GLTFLoader().load(TREE_URL, (gltf) => {
   scene.remove(treeGroup);
-  placeTreesFromTemplate(gltf.scene);
+  const template = gltf.scene;
+  template.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; } });
+  const bbox = new THREE.Box3().setFromObject(template);
+  const sz   = bbox.getSize(new THREE.Vector3());
+  const baseScale = 5.5 / sz.y;
+  const rng = seededRNG(42);
+  for (let i = 0; i < 22; i++) {
+    const a   = (i / 22) * Math.PI * 2 + rng() * 0.3;
+    const rad = WORLD + 2.0 + rng() * 3.5;
+    const clone = template.clone(true);
+    const s = baseScale * (0.75 + rng() * 0.55);
+    clone.scale.setScalar(s);
+    const cb = new THREE.Box3().setFromObject(clone);
+    clone.position.set(Math.cos(a) * rad, -cb.min.y, Math.sin(a) * rad);
+    clone.rotation.y = rng() * Math.PI * 2;
+    scene.add(clone);
+  }
 });
 
-// ── Grass tufts (3D blade clusters) ──────────────────────────────────────────
+// ── Grass tufts ───────────────────────────────────────────────────────────────
+const grassGroup = new THREE.Group();
 {
-  // Build a grass-tuft geometry: 6 tapered blades fanned at different angles
-  const verts = [], normals = [], uvs = [], indices = [];
-  const BLADES = 6, H = 0.38, BW = 0.038;
-  for (let b = 0; b < BLADES; b++) {
-    const angle = (b / BLADES) * Math.PI;
-    const lean  = 0.10 + (b % 3) * 0.06; // each blade leans a bit differently
-    const ax = Math.cos(angle), az = Math.sin(angle);
-    const lx = Math.cos(angle + 0.4) * lean, lz = Math.sin(angle + 0.4) * lean;
-    const base = verts.length / 3;
-    // bottom-left, bottom-right, top (tapered triangle = realistic blade)
-    verts.push(-ax*BW, 0,      -az*BW,
-                ax*BW, 0,       az*BW,
-                lx,    H*0.55, lz,        // mid-left  (gives blade width midway)
-               -lx,    H*0.55,-lz,        // mid-right
-                (lx+(-lx))*0.5, H, (lz+(-lz))*0.5); // tip
-    uvs.push(0,0, 1,0, 0.2,0.55, 0.8,0.55, 0.5,1);
-    // simple upward-ish normals (will be recomputed)
-    for (let n = 0; n < 5; n++) normals.push(0, 1, 0);
-    // Two triangles forming the lower half, two for the upper taper
-    indices.push(
-      base,base+1,base+2, base,base+2,base+3,  // lower quad
-      base+3,base+2,base+4,                      // upper triangle
-      // back faces
-      base+2,base+1,base, base+3,base+2,base, base+4,base+2,base+3
-    );
+  const qGeo = new THREE.PlaneGeometry(0.18, 0.4);
+  const qMat = new THREE.MeshBasicMaterial({ color: 0x4aaa2a, side: THREE.DoubleSide });
+  function makeGrassInst(seed, rotOffset) {
+    const inst = new THREE.InstancedMesh(qGeo, qMat, 300);
+    const d = new THREE.Object3D(), r = seededRNG(seed);
+    for (let i = 0; i < 300; i++) {
+      d.position.set((r() * 2 - 1) * (WORLD - 1), 0.2, (r() * 2 - 1) * (WORLD - 1));
+      d.rotation.y = r() * Math.PI + rotOffset;
+      d.scale.setScalar(0.7 + r() * 0.8);
+      d.updateMatrix(); inst.setMatrixAt(i, d.matrix);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    return inst;
   }
-  const tGeo = new THREE.BufferGeometry();
-  tGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts,   3));
-  tGeo.setAttribute('normal',   new THREE.Float32BufferAttribute(normals, 3));
-  tGeo.setAttribute('uv',       new THREE.Float32BufferAttribute(uvs,     2));
-  tGeo.setIndex(indices);
-  tGeo.computeVertexNormals();
-
-  const tMat = new THREE.MeshStandardMaterial({
-    color: 0x4aaa28, roughness: 0.9, side: THREE.DoubleSide,
-    vertexColors: false,
-  });
-  const COUNT = 420;
-  const gInst = new THREE.InstancedMesh(tGeo, tMat, COUNT);
-  const d = new THREE.Object3D(), rg = seededRNG(91);
-  for (let i = 0; i < COUNT; i++) {
-    d.position.set((rg() * 2 - 1) * (WORLD - 1.2), 0, (rg() * 2 - 1) * (WORLD - 1.2));
-    d.rotation.y = rg() * Math.PI * 2;
-    d.scale.setScalar(0.55 + rg() * 1.0);
-    d.updateMatrix(); gInst.setMatrixAt(i, d.matrix);
-  }
-  gInst.instanceMatrix.needsUpdate = true;
-  scene.add(gInst);
+  grassGroup.add(makeGrassInst(91, 0));
+  grassGroup.add(makeGrassInst(91, Math.PI / 2));
 }
+scene.add(grassGroup);
+new GLTFLoader().load(GRASS_URL, (gltf) => {
+  scene.remove(grassGroup);
+  const geos = [];
+  gltf.scene.updateMatrixWorld(true);
+  gltf.scene.traverse(m => {
+    if (!m.isMesh || !m.geometry) return;
+    const g = m.geometry.clone();
+    // Normalise attributes to pos+normal+uv so mergeGeometries works
+    for (const k of Object.keys(g.attributes)) {
+      if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+    }
+    if (!g.attributes.normal) g.computeVertexNormals();
+    if (!g.attributes.uv) {
+      g.setAttribute('uv', new THREE.BufferAttribute(
+        new Float32Array(g.attributes.position.count * 2), 2));
+    }
+    g.applyMatrix4(m.matrixWorld);
+    geos.push(g);
+  });
+  if (geos.length === 0) { scene.add(grassGroup); return; }
+  const merged = mergeGeometries(geos, false);
+  if (!merged) { scene.add(grassGroup); return; }
+  merged.computeBoundingBox();
+  const sz    = merged.boundingBox.getSize(new THREE.Vector3());
+  const scale = 0.6 / sz.y;
+  merged.scale(scale, scale, scale);
+  merged.computeBoundingBox();
+  const cx = (merged.boundingBox.min.x + merged.boundingBox.max.x) / 2;
+  const cz = (merged.boundingBox.min.z + merged.boundingBox.max.z) / 2;
+  merged.translate(-cx, -merged.boundingBox.min.y, -cz);
+  const inst = new THREE.InstancedMesh(merged,
+    new THREE.MeshStandardMaterial({ color: 0x3d8a28, roughness: 0.9, side: THREE.DoubleSide }), 90);
+  const d = new THREE.Object3D(), r = seededRNG(91);
+  for (let i = 0; i < 90; i++) {
+    d.position.set((r() * 2 - 1) * (WORLD - 1.5), 0, (r() * 2 - 1) * (WORLD - 1.5));
+    d.rotation.y = r() * Math.PI * 2;
+    d.scale.setScalar(0.6 + r() * 0.9);
+    d.updateMatrix(); inst.setMatrixAt(i, d.matrix);
+  }
+  inst.instanceMatrix.needsUpdate = true;
+  scene.add(inst);
+});
 
 // ── Pebbles ───────────────────────────────────────────────────────────────────
 const pebbleInst = new THREE.InstancedMesh(
@@ -765,7 +749,7 @@ function endGame() {
 
   elOvEmoji.textContent   = '😢';
   elOvTitle.textContent   = 'Πολύ Πεινασμένος!';
-  elOvDesc.textContent    = 'Ο σκαντζόχοιρός σου έμεινε χωρίς φαγητό…';
+  elOvDesc.textContent    = 'Το Αγκαθάκι σου έμεινε χωρίς φαγητό…';
   elOvHint.textContent    = '';
   elOvScore.textContent   = 'Σκορ: ' + score;
   elOvHi.textContent      = 'Ρεκόρ: ' + hiScore;
@@ -799,17 +783,6 @@ function update(dt) {
     hPos.z = Math.max(-WORLD, Math.min(WORLD, hPos.z + iz * SPEED * speedMult * dt));
     // Nose always faces movement direction (instant)
     hFacing.setFromAxisAngle(upVec, Math.atan2(ix, iz));
-  }
-  // Tree collision: push hedgehog out of tree trunks
-  for (const obs of treeObstacles) {
-    const dx = hPos.x - obs.x, dz = hPos.z - obs.z;
-    const dist2 = dx * dx + dz * dz;
-    const minD  = obs.r + 0.45;
-    if (dist2 < minD * minD && dist2 > 0.0001) {
-      const inv = minD / Math.sqrt(dist2);
-      hPos.x = obs.x + dx * inv;
-      hPos.z = obs.z + dz * inv;
-    }
   }
 
   const bob = moving ? Math.sin(simTime * 9) * 0.09 : 0;
