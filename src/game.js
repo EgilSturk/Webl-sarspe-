@@ -9,7 +9,6 @@ const TREE_URL       = './assets/tree.glb';
 const GRASS_GLB_URL  = 'https://d3u0tzju9qaucj.cloudfront.net/7d051b5a-7bfe-49fe-a484-24e7b3a9458a/838753c1-1c84-44e5-974a-975a5fdd66d2.glb';
 const ROCK_GLB_URL   = 'https://d3u0tzju9qaucj.cloudfront.net/7d051b5a-7bfe-49fe-a484-24e7b3a9458a/f3eb4736-4f3e-4bf0-8a9d-3f621f88c35c.glb';
 const MUSHROOM_GLB_URL = 'https://d3u0tzju9qaucj.cloudfront.net/7d051b5a-7bfe-49fe-a484-24e7b3a9458a/481128b0-44ad-4dae-87c6-bc478f0ebeca.glb';
-const GROUND_TEX_URL = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141421_6abab39d-6fa3-4dfc-ba52-0fda3bfe5530.png';
 const MUSIC_URL      = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141450_8c0d6f66-dfa9-49f9-9072-ed7afc41516c.m4a';
 const COLLECT_URL    = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141452_d51b6392-abad-4eff-ac73-df6076365ec5.mp3';
 const WORLD        = 22;
@@ -130,55 +129,23 @@ skyFill.position.set(-14, 20, -10);
 scene.add(skyFill);
 scene.add(new THREE.HemisphereLight(0x9ddcf0, 0x5aaa38, 0.5));
 
-// ── Ground ────────────────────────────────────────────────────────────────────
-function makeDirtGrassTexture() {
-  const sz = 512, cv = document.createElement('canvas');
-  cv.width = cv.height = sz;
-  const ctx = cv.getContext('2d');
-  ctx.fillStyle = '#3d2610';
-  ctx.fillRect(0, 0, sz, sz);
-  for (let i = 0; i < 900; i++) {
-    const x = Math.random() * sz, y = Math.random() * sz, r = 10 + Math.random() * 35;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    const gr = 90 + (Math.random() * 40 | 0), gg = 130 + (Math.random() * 50 | 0);
-    g.addColorStop(0, `rgba(${gr},${gg},25,0.72)`);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  }
-  for (let i = 0; i < 250; i++) {
-    const x = Math.random() * sz, y = Math.random() * sz, r = 3 + Math.random() * 14;
-    const br = 65 + (Math.random() * 35 | 0);
-    ctx.fillStyle = `rgba(${br},${Math.random() * 25 + 15 | 0},8,0.5)`;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  }
-  const tex = new THREE.CanvasTexture(cv);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(7, 7);
-  return tex;
-}
-
-const texLoader = new THREE.TextureLoader();
+// ── Ground — plain soil with grass tufts on top ───────────────────────────────
 {
-  // Outer dirt ring — wider than playing field, always visible
-  const dirtMat = new THREE.MeshStandardMaterial({ color: 0x3d2610, roughness: 0.95 });
-  const dirtPlane = new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 2 + 30, WORLD * 2 + 30), dirtMat);
-  dirtPlane.rotation.x = -Math.PI / 2;
-  dirtPlane.position.y = -0.015;
-  dirtPlane.receiveShadow = true;
-  scene.add(dirtPlane);
+  // Wide base — dark soil visible beyond the field edge
+  const outerMat = new THREE.MeshStandardMaterial({ color: 0x3a2008, roughness: 0.97 });
+  const outerPlane = new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 2 + 30, WORLD * 2 + 30), outerMat);
+  outerPlane.rotation.x = -Math.PI / 2;
+  outerPlane.position.y = -0.015;
+  outerPlane.receiveShadow = true;
+  scene.add(outerPlane);
+
+  // Playing-field layer — slightly lighter warm soil
+  const soilMat = new THREE.MeshStandardMaterial({ color: 0x5c3a18, roughness: 0.95 });
+  const soilPlane = new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 2, WORLD * 2), soilMat);
+  soilPlane.rotation.x = -Math.PI / 2;
+  soilPlane.receiveShadow = true;
+  scene.add(soilPlane);
 }
-function buildGround(tex) {
-  const mat = tex
-    ? (tex.wrapS = tex.wrapT = THREE.RepeatWrapping, tex.repeat.set(8, 8),
-       tex.colorSpace = THREE.SRGBColorSpace,
-       new THREE.MeshStandardMaterial({ map: tex, roughness: 0.88 }))
-    : new THREE.MeshStandardMaterial({ map: makeDirtGrassTexture(), roughness: 0.9 });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 2, WORLD * 2), mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.receiveShadow = true;
-  scene.add(mesh);
-}
-texLoader.load(GROUND_TEX_URL, buildGround, undefined, () => buildGround(null));
 
 // ── Trees + collision obstacles ────────────────────────────────────────────────
 const treeObstacles = []; // { x, z, r } — filled when trees are placed
