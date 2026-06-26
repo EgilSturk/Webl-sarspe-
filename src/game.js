@@ -6,6 +6,9 @@ clearTimeout(window.__emergencyTimer);
 // ── Config ────────────────────────────────────────────────────────────────────
 const HEDGEHOG_URL   = './assets/hedgehog.glb';
 const TREE_URL       = './assets/tree.glb';
+const GRASS_GLB_URL  = 'https://d3u0tzju9qaucj.cloudfront.net/7d051b5a-7bfe-49fe-a484-24e7b3a9458a/838753c1-1c84-44e5-974a-975a5fdd66d2.glb';
+const ROCK_GLB_URL   = 'https://d3u0tzju9qaucj.cloudfront.net/7d051b5a-7bfe-49fe-a484-24e7b3a9458a/f3eb4736-4f3e-4bf0-8a9d-3f621f88c35c.glb';
+const MUSHROOM_GLB_URL = 'https://d3u0tzju9qaucj.cloudfront.net/7d051b5a-7bfe-49fe-a484-24e7b3a9458a/481128b0-44ad-4dae-87c6-bc478f0ebeca.glb';
 const GROUND_TEX_URL = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141421_6abab39d-6fa3-4dfc-ba52-0fda3bfe5530.png';
 const MUSIC_URL      = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141450_8c0d6f66-dfa9-49f9-9072-ed7afc41516c.m4a';
 const COLLECT_URL    = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141452_d51b6392-abad-4eff-ac73-df6076365ec5.mp3';
@@ -249,6 +252,54 @@ let grassInst = null;
   scene.add(grassInst);
 }
 
+// ── 3D Grass (replaces cross-quad placeholders when GLB loads) ─────────────────
+new GLTFLoader().load(GRASS_GLB_URL, (gltf) => {
+  if (grassInst) { scene.remove(grassInst); grassInst = null; }
+  const bbox = new THREE.Box3().setFromObject(gltf.scene);
+  const sz   = bbox.getSize(new THREE.Vector3());
+  const baseScale = 0.55 / Math.max(sz.x, sz.y, sz.z);
+  gltf.scene.traverse(m => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = false; } });
+  const rg3 = seededRNG(91);
+  for (let i = 0; i < 140; i++) {
+    const px = (rg3() * 2 - 1) * (WORLD - 1.5);
+    const pz = (rg3() * 2 - 1) * (WORLD - 1.5);
+    const clone = gltf.scene.clone(true);
+    clone.scale.setScalar(baseScale * (0.55 + rg3() * 0.9));
+    const cb = new THREE.Box3().setFromObject(clone);
+    clone.position.set(px, -cb.min.y, pz);
+    clone.rotation.y = rg3() * Math.PI * 2;
+    scene.add(clone);
+  }
+}, undefined, () => { /* keep cross-quad fallback */ });
+
+// ── 3D Rocks ─────────────────────────────────────────────────────────────────
+new GLTFLoader().load(ROCK_GLB_URL, (gltf) => {
+  const template = gltf.scene;
+  const bbox = new THREE.Box3().setFromObject(template);
+  const sz   = bbox.getSize(new THREE.Vector3());
+  const baseScale = 0.7 / Math.max(sz.x, sz.y, sz.z);
+  template.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  const rng = seededRNG(33);
+  const positions = [];
+  for (let attempt = 0; attempt < 300 && positions.length < 12; attempt++) {
+    const a = rng() * Math.PI * 2;
+    const r = 3.5 + rng() * (WORLD - 5);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    if (treeObstacles.some(t => (t.x - x) ** 2 + (t.z - z) ** 2 < 4)) continue;
+    if (positions.some(p => (p.x - x) ** 2 + (p.z - z) ** 2 < 5)) continue;
+    positions.push({ x, z });
+  }
+  for (const pos of positions) {
+    const clone = template.clone(true);
+    const s = baseScale * (0.5 + rng() * 1.0);
+    clone.scale.setScalar(s);
+    const cb = new THREE.Box3().setFromObject(clone);
+    clone.position.set(pos.x, -cb.min.y, pos.z);
+    clone.rotation.y = rng() * Math.PI * 2;
+    scene.add(clone);
+  }
+}, undefined, () => { /* rocks are decorative, no fallback needed */ });
+
 // ── Pebbles ───────────────────────────────────────────────────────────────────
 const pebbleInst = new THREE.InstancedMesh(
   new THREE.SphereGeometry(0.11, 5, 4),
@@ -388,6 +439,16 @@ const hFacing = new THREE.Quaternion();
 const upVec   = new THREE.Vector3(0, 1, 0);
 function activeHedgehog() { return hedgehogNode || procHedgehog; }
 
+// ── 3D Mushroom food template ─────────────────────────────────────────────────
+let mushroomTemplate = null;
+new GLTFLoader().load(MUSHROOM_GLB_URL, (gltf) => {
+  const bbox = new THREE.Box3().setFromObject(gltf.scene);
+  const sz   = bbox.getSize(new THREE.Vector3());
+  gltf.scene.scale.setScalar(0.85 / Math.max(sz.x, sz.y, sz.z));
+  gltf.scene.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  mushroomTemplate = gltf.scene;
+}, undefined, () => { /* keep procedural fallback */ });
+
 // ── Food system ───────────────────────────────────────────────────────────────
 const FOOD_TYPES = [
   {
@@ -408,6 +469,11 @@ const FOOD_TYPES = [
   {
     label: 'Μανιτάρι', pts: 15,
     make() {
+      if (mushroomTemplate) {
+        const clone = mushroomTemplate.clone(true);
+        clone.position.y = 0;
+        return clone;
+      }
       const g = new THREE.Group();
       g.add(Object.assign(new THREE.Mesh(
         new THREE.CylinderGeometry(0.1, 0.15, 0.4, 9),
