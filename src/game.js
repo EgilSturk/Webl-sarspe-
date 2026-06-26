@@ -227,24 +227,55 @@ new GLTFLoader().load(TREE_URL, (gltf) => {
   placeTreesFromTemplate(gltf.scene);
 });
 
-// ── Grass — dense cross-quad InstancedMesh for full ground coverage ───────────
+// ── Grass — textured blade quads (canvas alpha mask gives blade shape) ────────
+function makeGrassBladeTexture(seed) {
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 128;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, 64, 128);
+  const blades = [[0.22, -0.10], [0.50, 0.02], [0.78, 0.13]];
+  const rg = seededRNG(seed);
+  blades.forEach(([bx, lean]) => {
+    const lightness = 0.28 + rg() * 0.12;
+    const g = ctx.createLinearGradient(bx * 64, 128, (bx + lean) * 64, 0);
+    g.addColorStop(0,   `hsl(115,62%,${(lightness * 100) | 0}%)`);
+    g.addColorStop(0.55, `hsl(118,55%,${((lightness + 0.1) * 100) | 0}%)`);
+    g.addColorStop(1,   'rgba(60,140,30,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo((bx - 0.07) * 64, 128);
+    ctx.lineTo((bx + 0.07) * 64, 128);
+    ctx.quadraticCurveTo((bx + lean * 0.6 + 0.02) * 64, 50, (bx + lean) * 64, 6);
+    ctx.quadraticCurveTo((bx + lean * 0.6 - 0.02) * 64, 50, (bx - 0.07) * 64, 128);
+    ctx.closePath();
+    ctx.fill();
+  });
+  return new THREE.CanvasTexture(cv);
+}
+
 {
-  const geo = new THREE.PlaneGeometry(0.2, 0.52);
-  const COUNT = 2000;
-  const grassColors = [0x3aaa20, 0x2e9a18, 0x48b828, 0x3d9c1c, 0x52aa24];
-  grassColors.forEach((col, ci) => {
-    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.8, side: THREE.DoubleSide });
-    const inst = new THREE.InstancedMesh(geo, mat, (COUNT / grassColors.length) * 2);
-    const d = new THREE.Object3D(), rg = seededRNG(91 + ci * 7);
-    const perColor = COUNT / grassColors.length;
-    for (let i = 0; i < perColor; i++) {
-      const px = (rg() * 2 - 1) * (WORLD - 0.8), pz = (rg() * 2 - 1) * (WORLD - 0.8);
-      const sc = 0.6 + rg() * 1.1, ry = rg() * Math.PI;
+  const COUNT = 2200;
+  // Two texture variants for subtle colour variation
+  [makeGrassBladeTexture(91), makeGrassBladeTexture(97)].forEach((tex, ti) => {
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, alphaTest: 0.08,
+      side: THREE.DoubleSide,
+    });
+    const geo = new THREE.PlaneGeometry(0.62, 0.68);
+    const half = COUNT / 2;
+    const inst = new THREE.InstancedMesh(geo, mat, half * 2);
+    const d = new THREE.Object3D(), rg = seededRNG(91 + ti * 13);
+    for (let i = 0; i < half; i++) {
+      const px = (rg() * 2 - 1) * (WORLD - 0.8);
+      const pz = (rg() * 2 - 1) * (WORLD - 0.8);
+      const sc = 0.55 + rg() * 1.0;
+      const ry = rg() * Math.PI;
       for (let c = 0; c < 2; c++) {
-        d.position.set(px, 0.26 * sc, pz);
+        d.position.set(px, 0.34 * sc, pz);
         d.rotation.set(0, ry + c * Math.PI / 2, 0);
         d.scale.setScalar(sc);
-        d.updateMatrix(); inst.setMatrixAt(i * 2 + c, d.matrix);
+        d.updateMatrix();
+        inst.setMatrixAt(i * 2 + c, d.matrix);
       }
     }
     inst.instanceMatrix.needsUpdate = true;
@@ -252,24 +283,22 @@ new GLTFLoader().load(TREE_URL, (gltf) => {
   });
 }
 
-// ── 3D Grass accents (on top of instanced coverage) ──────────────────────────
+// ── 3D Grass accents on top ───────────────────────────────────────────────────
 new GLTFLoader().load(GRASS_GLB_URL, (gltf) => {
   const bbox = new THREE.Box3().setFromObject(gltf.scene);
   const sz   = bbox.getSize(new THREE.Vector3());
   const baseScale = 0.6 / Math.max(sz.x, sz.y, sz.z);
   gltf.scene.traverse(m => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = false; } });
   const rg3 = seededRNG(94);
-  for (let i = 0; i < 90; i++) {
-    const px = (rg3() * 2 - 1) * (WORLD - 1.5);
-    const pz = (rg3() * 2 - 1) * (WORLD - 1.5);
+  for (let i = 0; i < 80; i++) {
     const clone = gltf.scene.clone(true);
     clone.scale.setScalar(baseScale * (0.5 + rg3() * 1.0));
     const cb = new THREE.Box3().setFromObject(clone);
-    clone.position.set(px, -cb.min.y, pz);
+    clone.position.set((rg3()*2-1)*(WORLD-1.5), -cb.min.y, (rg3()*2-1)*(WORLD-1.5));
     clone.rotation.y = rg3() * Math.PI * 2;
     scene.add(clone);
   }
-}, undefined, () => { /* accent only, no fallback needed */ });
+}, undefined, () => {});
 
 // ── 3D Rocks + collision ──────────────────────────────────────────────────────
 const rockObstacles = []; // { x, z, r }
