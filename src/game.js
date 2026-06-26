@@ -1,13 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 clearTimeout(window.__emergencyTimer);
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const HEDGEHOG_URL   = './assets/hedgehog.glb';
 const TREE_URL       = './assets/tree.glb';
-const GRASS_URL      = './assets/grass.glb';
 const GROUND_TEX_URL = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141421_6abab39d-6fa3-4dfc-ba52-0fda3bfe5530.png';
 const MUSIC_URL      = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141450_8c0d6f66-dfa9-49f9-9072-ed7afc41516c.m4a';
 const COLLECT_URL    = 'https://d8j0ntlcm91z4.cloudfront.net/user_3Aj4UpTS3to1n1H7M2bIRV76drb/hf_20260625_141452_d51b6392-abad-4eff-ac73-df6076365ec5.mp3';
@@ -137,7 +135,52 @@ function buildGround(tex) {
 }
 texLoader.load(GROUND_TEX_URL, buildGround, undefined, () => buildGround(null));
 
-// ── Trees ─────────────────────────────────────────────────────────────────────
+// ── Trees + collision obstacles ────────────────────────────────────────────────
+const treeObstacles = []; // { x, z, r } — filled when trees are placed
+
+function placeTreesFromTemplate(template) {
+  const bbox = new THREE.Box3().setFromObject(template);
+  const sz   = bbox.getSize(new THREE.Vector3());
+  const baseScale = 5.0 / sz.y;
+  template.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; } });
+
+  const rng = seededRNG(42);
+
+  // ── Inner trees (on the playing field) — primary gameplay trees ───────────
+  const innerPositions = [];
+  for (let attempt = 0; attempt < 400 && innerPositions.length < 20; attempt++) {
+    const a = rng() * Math.PI * 2;
+    const r = 4 + rng() * (WORLD - 6);  // radius 4–18: keep center clear
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    if (innerPositions.some(p => (p.x - x) ** 2 + (p.z - z) ** 2 < 16)) continue;
+    innerPositions.push({ x, z });
+  }
+  for (const pos of innerPositions) {
+    const clone = template.clone(true);
+    const s = baseScale * (0.65 + rng() * 0.55);
+    clone.scale.setScalar(s);
+    const cb = new THREE.Box3().setFromObject(clone);
+    clone.position.set(pos.x, -cb.min.y, pos.z);
+    clone.rotation.y = rng() * Math.PI * 2;
+    scene.add(clone);
+    treeObstacles.push({ x: pos.x, z: pos.z, r: 0.6 });
+  }
+
+  // ── A few large trees at boundary for visual depth ─────────────────────────
+  for (let i = 0; i < 8; i++) {
+    const a   = (i / 8) * Math.PI * 2 + rng() * 0.4;
+    const rad = WORLD + 1.5 + rng() * 3.0;
+    const clone = template.clone(true);
+    const s = baseScale * (1.0 + rng() * 0.5);
+    clone.scale.setScalar(s);
+    const cb = new THREE.Box3().setFromObject(clone);
+    clone.position.set(Math.cos(a) * rad, -cb.min.y, Math.sin(a) * rad);
+    clone.rotation.y = rng() * Math.PI * 2;
+    scene.add(clone);
+  }
+}
+
+// Procedural fallback trees (removed when GLB loads)
 const treeGroup = new THREE.Group();
 {
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.95 });
@@ -147,9 +190,9 @@ const treeGroup = new THREE.Group();
   const leafCols = [0x2a6020, 0x357025, 0x225018, 0x2e6828];
   const pineCols = [0x1a4810, 0x245018, 0x1c4012, 0x20561a];
   const rng = seededRNG(42);
-  for (let i = 0; i < 40; i++) {
-    const a   = (i / 40) * Math.PI * 2 + rng() * 0.2;
-    const rad = WORLD + 1.8 + rng() * 2.8;
+  for (let i = 0; i < 20; i++) {
+    const a   = rng() * Math.PI * 2;
+    const rad = 4 + rng() * (WORLD - 6);
     const x   = Math.cos(a) * rad, z = Math.sin(a) * rad;
     const h   = 1.6 + rng() * 1.5;
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
@@ -181,88 +224,30 @@ const treeGroup = new THREE.Group();
 scene.add(treeGroup);
 new GLTFLoader().load(TREE_URL, (gltf) => {
   scene.remove(treeGroup);
-  const template = gltf.scene;
-  template.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; } });
-  const bbox = new THREE.Box3().setFromObject(template);
-  const sz   = bbox.getSize(new THREE.Vector3());
-  const baseScale = 5.5 / sz.y;
-  const rng = seededRNG(42);
-  for (let i = 0; i < 22; i++) {
-    const a   = (i / 22) * Math.PI * 2 + rng() * 0.3;
-    const rad = WORLD + 2.0 + rng() * 3.5;
-    const clone = template.clone(true);
-    const s = baseScale * (0.75 + rng() * 0.55);
-    clone.scale.setScalar(s);
-    const cb = new THREE.Box3().setFromObject(clone);
-    clone.position.set(Math.cos(a) * rad, -cb.min.y, Math.sin(a) * rad);
-    clone.rotation.y = rng() * Math.PI * 2;
-    scene.add(clone);
-  }
+  placeTreesFromTemplate(gltf.scene);
 });
 
-// ── Grass tufts ───────────────────────────────────────────────────────────────
-const grassGroup = new THREE.Group();
+// ── Grass tufts (cross-quad pairs — placeholder until 3D model loads) ────────
+let grassInst = null;
 {
-  const qGeo = new THREE.PlaneGeometry(0.18, 0.4);
-  const qMat = new THREE.MeshBasicMaterial({ color: 0x4aaa2a, side: THREE.DoubleSide });
-  function makeGrassInst(seed, rotOffset) {
-    const inst = new THREE.InstancedMesh(qGeo, qMat, 300);
-    const d = new THREE.Object3D(), r = seededRNG(seed);
-    for (let i = 0; i < 300; i++) {
-      d.position.set((r() * 2 - 1) * (WORLD - 1), 0.2, (r() * 2 - 1) * (WORLD - 1));
-      d.rotation.y = r() * Math.PI + rotOffset;
-      d.scale.setScalar(0.7 + r() * 0.8);
-      d.updateMatrix(); inst.setMatrixAt(i, d.matrix);
+  const qGeo = new THREE.PlaneGeometry(0.22, 0.44);
+  const qMat = new THREE.MeshStandardMaterial({ color: 0x4aaa28, roughness: 0.85, side: THREE.DoubleSide });
+  const COUNT = 500;
+  grassInst = new THREE.InstancedMesh(qGeo, qMat, COUNT * 2);
+  const d = new THREE.Object3D(), rg = seededRNG(91);
+  for (let i = 0; i < COUNT; i++) {
+    const px = (rg() * 2 - 1) * (WORLD - 1.2), pz = (rg() * 2 - 1) * (WORLD - 1.2);
+    const sc = 0.7 + rg() * 0.9, ry = rg() * Math.PI;
+    for (let c = 0; c < 2; c++) {
+      d.position.set(px, 0.22 * sc, pz);
+      d.rotation.set(0, ry + c * Math.PI / 2, 0);
+      d.scale.setScalar(sc);
+      d.updateMatrix(); grassInst.setMatrixAt(i * 2 + c, d.matrix);
     }
-    inst.instanceMatrix.needsUpdate = true;
-    return inst;
   }
-  grassGroup.add(makeGrassInst(91, 0));
-  grassGroup.add(makeGrassInst(91, Math.PI / 2));
+  grassInst.instanceMatrix.needsUpdate = true;
+  scene.add(grassInst);
 }
-scene.add(grassGroup);
-new GLTFLoader().load(GRASS_URL, (gltf) => {
-  scene.remove(grassGroup);
-  const geos = [];
-  gltf.scene.updateMatrixWorld(true);
-  gltf.scene.traverse(m => {
-    if (!m.isMesh || !m.geometry) return;
-    const g = m.geometry.clone();
-    // Normalise attributes to pos+normal+uv so mergeGeometries works
-    for (const k of Object.keys(g.attributes)) {
-      if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
-    }
-    if (!g.attributes.normal) g.computeVertexNormals();
-    if (!g.attributes.uv) {
-      g.setAttribute('uv', new THREE.BufferAttribute(
-        new Float32Array(g.attributes.position.count * 2), 2));
-    }
-    g.applyMatrix4(m.matrixWorld);
-    geos.push(g);
-  });
-  if (geos.length === 0) { scene.add(grassGroup); return; }
-  const merged = mergeGeometries(geos, false);
-  if (!merged) { scene.add(grassGroup); return; }
-  merged.computeBoundingBox();
-  const sz    = merged.boundingBox.getSize(new THREE.Vector3());
-  const scale = 0.6 / sz.y;
-  merged.scale(scale, scale, scale);
-  merged.computeBoundingBox();
-  const cx = (merged.boundingBox.min.x + merged.boundingBox.max.x) / 2;
-  const cz = (merged.boundingBox.min.z + merged.boundingBox.max.z) / 2;
-  merged.translate(-cx, -merged.boundingBox.min.y, -cz);
-  const inst = new THREE.InstancedMesh(merged,
-    new THREE.MeshStandardMaterial({ color: 0x3d8a28, roughness: 0.9, side: THREE.DoubleSide }), 90);
-  const d = new THREE.Object3D(), r = seededRNG(91);
-  for (let i = 0; i < 90; i++) {
-    d.position.set((r() * 2 - 1) * (WORLD - 1.5), 0, (r() * 2 - 1) * (WORLD - 1.5));
-    d.rotation.y = r() * Math.PI * 2;
-    d.scale.setScalar(0.6 + r() * 0.9);
-    d.updateMatrix(); inst.setMatrixAt(i, d.matrix);
-  }
-  inst.instanceMatrix.needsUpdate = true;
-  scene.add(inst);
-});
 
 // ── Pebbles ───────────────────────────────────────────────────────────────────
 const pebbleInst = new THREE.InstancedMesh(
@@ -783,6 +768,17 @@ function update(dt) {
     hPos.z = Math.max(-WORLD, Math.min(WORLD, hPos.z + iz * SPEED * speedMult * dt));
     // Nose always faces movement direction (instant)
     hFacing.setFromAxisAngle(upVec, Math.atan2(ix, iz));
+  }
+  // Tree collision: push hedgehog out of tree trunks
+  for (const obs of treeObstacles) {
+    const dx = hPos.x - obs.x, dz = hPos.z - obs.z;
+    const dist2 = dx * dx + dz * dz;
+    const minD  = obs.r + 0.45;
+    if (dist2 < minD * minD && dist2 > 0.0001) {
+      const inv = minD / Math.sqrt(dist2);
+      hPos.x = obs.x + dx * inv;
+      hPos.z = obs.z + dz * inv;
+    }
   }
 
   const bob = moving ? Math.sin(simTime * 9) * 0.09 : 0;
