@@ -63,7 +63,7 @@ document.body.insertBefore(renderer.domElement, document.body.firstChild);
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x8ec8e8, 0.013);
+scene.fog = new THREE.FogExp2(0x8ec8e8, 0.030);
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 90);
@@ -131,15 +131,6 @@ scene.add(new THREE.HemisphereLight(0x9ddcf0, 0x5aaa38, 0.5));
 
 // ── Ground — plain soil with grass tufts on top ───────────────────────────────
 {
-  // Wide base — dark soil visible beyond the field edge
-  const outerMat = new THREE.MeshStandardMaterial({ color: 0x3a2008, roughness: 0.97 });
-  const outerPlane = new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 2 + 30, WORLD * 2 + 30), outerMat);
-  outerPlane.rotation.x = -Math.PI / 2;
-  outerPlane.position.y = -0.015;
-  outerPlane.receiveShadow = true;
-  scene.add(outerPlane);
-
-  // Playing-field layer — slightly lighter warm soil
   const soilMat = new THREE.MeshStandardMaterial({ color: 0x5c3a18, roughness: 0.95 });
   const soilPlane = new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 2, WORLD * 2), soilMat);
   soilPlane.rotation.x = -Math.PI / 2;
@@ -154,7 +145,12 @@ function placeTreesFromTemplate(template) {
   const bbox = new THREE.Box3().setFromObject(template);
   const sz   = bbox.getSize(new THREE.Vector3());
   const baseScale = 5.0 / sz.y;
-  template.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; } });
+  template.traverse(m => {
+    if (m.isMesh) {
+      m.castShadow = true; m.receiveShadow = false;
+      if (m.material) { m.material.transparent = false; m.material.depthWrite = true; m.material.needsUpdate = true; }
+    }
+  });
 
   const rng = seededRNG(42);
 
@@ -254,7 +250,7 @@ function makeGrassBladeTexture(seed) {
 }
 
 {
-  const COUNT = 4000;
+  const COUNT = 5500;
   // Two texture variants for subtle colour variation
   [makeGrassBladeTexture(91), makeGrassBladeTexture(97)].forEach((tex, ti) => {
     const mat = new THREE.MeshBasicMaterial({
@@ -344,18 +340,57 @@ for (let i = 0; i < 50; i++) {
 pebbleInst.instanceMatrix.needsUpdate = true;
 scene.add(pebbleInst);
 
-// ── Flowers ───────────────────────────────────────────────────────────────────
-const flowerCols = [0xffee55, 0xff88bb, 0xffffff, 0xff6644, 0xaa77ff];
-const flowerGeo  = new THREE.CircleGeometry(0.18, 5);
-const rf = seededRNG(55);
-for (let i = 0; i < 90; i++) {
-  const fl = new THREE.Mesh(flowerGeo, new THREE.MeshBasicMaterial({
-    color: flowerCols[i % 5], side: THREE.DoubleSide,
-  }));
-  fl.position.set((rf() * 2 - 1) * (WORLD - 1.5), 0.04, (rf() * 2 - 1) * (WORLD - 1.5));
-  fl.rotation.x = -Math.PI / 2 + (rf() - 0.5) * 0.3;
-  fl.rotation.z = rf() * Math.PI * 2;
-  scene.add(fl);
+// ── Flowers — canvas-textured flat planes ─────────────────────────────────────
+function makeFlowerTexture(hue, petals) {
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 64;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, 64, 64);
+  const cx = 32, cy = 32;
+  for (let p = 0; p < petals; p++) {
+    const angle = (p / petals) * Math.PI * 2;
+    const px = cx + Math.cos(angle) * 15;
+    const py = cy + Math.sin(angle) * 15;
+    ctx.beginPath();
+    ctx.ellipse(px, py, 9, 6, angle, 0, Math.PI * 2);
+    ctx.fillStyle = `hsl(${hue},78%,66%)`;
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffdd33';
+  ctx.fill();
+  return new THREE.CanvasTexture(cv);
+}
+{
+  const FLOWER_SPECS = [
+    { hue: 0,   petals: 5 },
+    { hue: 300, petals: 6 },
+    { hue: 50,  petals: 5 },
+    { hue: 200, petals: 7 },
+    { hue: 270, petals: 6 },
+  ];
+  const flGeo = new THREE.PlaneGeometry(0.44, 0.44);
+  const PER_VARIANT = 26;
+  FLOWER_SPECS.forEach(({ hue, petals }, hi) => {
+    const tex = makeFlowerTexture(hue, petals);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, alphaTest: 0.1,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    const inst = new THREE.InstancedMesh(flGeo, mat, PER_VARIANT);
+    const d = new THREE.Object3D();
+    const rf = seededRNG(55 + hi * 19);
+    for (let i = 0; i < PER_VARIANT; i++) {
+      d.position.set((rf() * 2 - 1) * (WORLD - 1.5), 0.02, (rf() * 2 - 1) * (WORLD - 1.5));
+      d.rotation.set(-Math.PI / 2, rf() * Math.PI * 2, 0);
+      d.scale.setScalar(0.75 + rf() * 0.65);
+      d.updateMatrix();
+      inst.setMatrixAt(i, d.matrix);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    scene.add(inst);
+  });
 }
 
 // ── Procedural hedgehog (fallback while GLB loads) ────────────────────────────
